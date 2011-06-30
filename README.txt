@@ -36,6 +36,9 @@ array(
 );
 
 
+Defaults:
+    See the top of core/components/customurls/elements/plugins/customurls.plugin.php for the most current defaults and an array of all possible settings.
+
 Usage:
     Other than setting up the url schemas, there's not much to do...
     - Unless you disable it, the object's fields will set to placeholders in the document with default prefix "customurls".

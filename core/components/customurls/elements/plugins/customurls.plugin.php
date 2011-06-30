@@ -41,58 +41,21 @@ $customurls = $modx->getService('customurls','customUrls',$modx->getOption('cust
 if (!($customurls instanceof customUrls)) {
     return '';
 }
-// defaults are set to userURLs defaults - sortof
-$defaults = array(
-    'landing_resource_id' => $modx->getOption('customurls.start',null,$modx->getOption('uu.start')),
-    'request_prefix' => 'user_',
-    'request_name_id' => 'id',
-    'request_name_action' => 'action',
-    'base_url' => '',
-    'url_prefix' => '',
-    'url_prefix_required' => true,
-    'url_suffix' => '',
-    'url_suffix_required' => true,
-    'url_delimiter' => '/',
-    'load_modx_service' => array(),    // loads as service if not empty
-    'search_class' => 'modUser',
-    'search_field' => 'username',
-    'search_result_field' => 'id',
-    'search_display_field' => '',
-    'search_where' => array('active' => 1),
-    'search_class_test_method' => '',
-    'action_map' => array(),
-    'redirect_if_accessed_directly' => true,
-    'redirect_if_object_not_found' => true,
-    'replace_page_titles' => true,
-);
-$custom_defaults = $modx->fromJSON($modx->getOption('customurls.defaults',null,'[]'));
-$defaults = array_merge($defaults,$custom_defaults);
-$url_schemes = $modx->fromJSON($modx->getOption('customurls.schemes',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
-
-// clean url_schemes
-$resource_may_redirect = array();
-$new_url_schemes = array();
+// see class file for defaults
+$url_schemes = $customurls->getUrlSchemas();
 foreach ($url_schemes as $name => $config) {
-    // ensure all options are set
-    $config = array_merge($defaults,$config);
     $resource_may_redirect[$config['landing_resource_id']] = isset($resource_may_redirect[$config['landing_resource_id']]) ? false : true;
-    $new_url_schemes[$name] = $config;
 }
-$url_schemes = $new_url_schemes;
-
-// get the event name
-switch($event) {
-    case 'OnPageNotFound':
-        foreach ($url_schemes as $url_scheme => $config) {
+foreach ($url_schemes as $url_scheme_name => $config) {
+    // get the event name
+    switch($event) {
+        case 'OnPageNotFound':
             $landing_resource_id = $config['landing_resource_id'];
-    
-            // Load ugm class  
+            // Load ugm class
+            // ToDO: add error checking
             if (!empty($config['load_modx_service'])) {
-                $load_modx_service_object = $modx->getService($config['load_modx_service']['name'],$config['load_modx_service']['class'],$modx->getOption($config['load_modx_service']['package'].'.core_path',null,$modx->getOption('core_path').'components/'.$config['load_modx_service']['package'].'/').'model/'.$config['load_modx_service']['package'].'/',$scriptProperties);
-                if (!($load_modx_service_object instanceof $config['load_modx_service']['class'])) {
-                    $modx->log(modX::LOG_LEVEL_ERROR, 'Could not load FURL custom service: '.$config['load_modx_service']['name']);
-                    continue;
-                }
+                $service = $customurls->loadService($url_scheme_name);
+                if (!$service) continue;
             }
             /* handle redirects */
             $alias = $_SERVER['REQUEST_URI'];
@@ -103,7 +66,7 @@ switch($event) {
             $alias = trim($alias, '/');
             // Divide by delimiter (slash by default) - returns array
             $url_parts = explode($config['url_delimiter'], $alias);
-    
+
             if (empty($url_parts[0])) continue;
             $wall_objectname = $url_parts[0];
             // Exit right away if required prefix or suffix is missing
@@ -116,12 +79,9 @@ switch($event) {
                 $wall_objectname = $customurls->replaceFromEnd($config['url_suffix'],'',$wall_objectname);
             }
             /* Check if object exists and object is active */
-            $object = $modx->getObject($config['search_class'],array_merge(array(
-                $config['search_field'] => urldecode($wall_objectname),
-            ),$config['search_where']));
-
-            // check if anything found
-            if (!($object instanceof $config['search_class'])) {continue;}
+            $target = urldecode($wall_objectname);
+            $object = $customurls->getObject($url_scheme_name,'search_field', $target);
+            if (!$object) {continue;}
             if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {continue;}
             $object_id = $object->get($config['search_result_field']);
             if (empty($object_id)) continue;
@@ -145,30 +105,34 @@ switch($event) {
             }
             /* pass variables to target resource as GET parameters */
             if ($object_id) {
-                $_REQUEST[$config['request_prefix'] . $config['request_name_id']] = $object_id;
+                $_REQUEST[$customurls->getRequestKey($url_scheme_name,'id')] = $object_id;
                 $scheme_param = $modx->getOption('customurls.scheme_param_name',null,'customurls_scheme_name');
-                $_REQUEST[$scheme_param] = $url_scheme;
+                $_REQUEST[$scheme_param] = $url_scheme_name;
             }
             if (strval($object_action)) {
-                $_REQUEST[$config['request_prefix'] . $config['request_name_action']] = $object_action;
+                $_REQUEST[$customurls->getRequestKey($url_scheme_name,'action')] = $object_action;
             }
             $modx->sendForward($landing_resource_id);
-        }
-        break;
+            break;
 
-    case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
-        $redirector = true;
-        $modx->setPlaceholder('customurls.pagetitle','');   // speeds things up by making sure placeholder always set
-    case 'OnWebPagePrerender' :     // after output is processed
-        $redirector = isset($redirector) ? $redirector : false;
-        $redirect = false;
-        $resource_id = $modx->resource->get('id');
-        foreach ($url_schemes as $url_scheme => $config) {
+        case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
+            $redirector = isset($redirector) ? $redirector : true;
+            $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
+            if ($config['set_placeholders']) {
+                $placeholders = array();
+                $placeholders[$ph_prefix.$config['display_placeholder']] = '';
+            }
+        case 'OnWebPagePrerender' :     // after output is processed
+            // ToDO: pass variables along in a class or something
+            $redirector = isset($redirector) ? $redirector : false;
+            $redirect = false;
+            $resource_id = $modx->resource->get('id');
+
             // only parse links on landing pages
             if ($resource_id != $config['landing_resource_id']) continue;
             if ($redirector && !$config['redirect_if_accessed_directly'] && !$config['redirect_if_object_not_found'] && !$config['replace_page_titles']) continue;
             // get the request info
-            $request_param = $config['request_prefix'] . $config['request_name_id'];
+            $request_param = $customurls->getRequestKey($url_scheme_name,'id');
             $objectid = isset($_REQUEST[$request_param]) ? $_REQUEST[$request_param] : 0;
             // get the object request refers to
             if (empty($objectid)) {
@@ -177,40 +141,39 @@ switch($event) {
                 }
                 continue;
             }
-            $object = $modx->getObject($config['search_class'],array_merge(array(
-                $config['search_result_field'] => $objectid,
-            ),$config['search_where']));
-            if (!($object instanceof $config['search_class'])) {
+            $object = $customurls->getObject($url_scheme_name,'search_result_field',$objectid);
+            if (!$object) {
                 if ($redirector && $config['redirect_if_object_not_found']) {
                     $redirect = true;
                 }
                 continue;
             }
             if ($redirector) {
-                if ($config['replace_page_titles']) {
-                    $pagetitle = $modx->resource->get('pagetitle');
-                    $title_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $object->get($config['search_field']);
-                    $modx->setPlaceholders('customurls.pagetitle',$title_field);
+                if ($config['set_placeholders']) {
+                    $display_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $config['search_field'];
+                    $placeholders[$ph_prefix.$config['display_placeholder']] = $object->get($display_field);
+                    $object_array = $object->toArray();
+                    $placeholders = array_merge($placeholders,$object_array);
+                    $modx->setPlaceholders($placeholders,$ph_prefix);
+                    // ToDo: set action placeholders (with verification that action exists)
                 }
-                continue;
-            }  // no more processing needed for this event...
+                continue;   // no more processing needed for this event...
+            }
             if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {continue;}
-            // get the old (resource) url
+            // get the old (resource) and new (object) url
             $resource_url = $modx->makeUrl($resource_id,'','');
-            // figure out the new url
-            $alias = urlencode($object->get($config['search_field']));
-            $new_url = $config['base_url'].$config['url_prefix'].$alias.$config['url_suffix'];
+            $new_url = $customurls->makeUrl($url_scheme_name,$object);
             // exchange the output string with the replaced one
             $output = $modx->resource->_output;
             $output = str_replace($resource_url,$new_url,$output);
             $modx->resource->_output = $output;
             return '';
-        }
-        if ($redirector && $redirect && $resource_may_redirect[$resource_id] == true) {
-            $modx->sendErrorPage();
-        }
-        break;
-    default:
-        break;
+            if ($redirector && $redirect && $resource_may_redirect[$resource_id] == true) {
+                $modx->sendErrorPage();
+            }
+            break;
+        default:
+            break;
+    }
 }
 return '';
