@@ -1,0 +1,6 @@
+﻿Changelog for CustomUrls.
+
+CustomUrls 0.1.0-beta
+======================================
+- Starting Version
+
