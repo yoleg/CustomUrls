@@ -28,6 +28,7 @@
  * ToDo: use RegExp or other method to add flexibility to URLs
 */
 $event = $modx->event->name;
+
 $events = array('OnPageNotFound','OnLoadWebDocument','OnWebPagePrerender');
 if (!in_array($event,$events)) return '';
 
@@ -43,6 +44,7 @@ if (!($customurls instanceof customUrls)) {
 }
 // see class file for defaults
 $url_schemes = $customurls->getUrlSchemas();
+$resource_may_redirect = array();
 foreach ($url_schemes as $name => $config) {
     $resource_may_redirect[$config['landing_resource_id']] = isset($resource_may_redirect[$config['landing_resource_id']]) ? false : true;
 }
@@ -129,6 +131,7 @@ foreach ($url_schemes as $url_scheme_name => $config) {
             $resource_id = $modx->resource->get('id');
 
             // only parse links on landing pages
+
             if ($resource_id != $config['landing_resource_id']) continue;
             if ($redirector && !$config['redirect_if_accessed_directly'] && !$config['redirect_if_object_not_found'] && !$config['replace_page_titles']) continue;
             // get the request info
@@ -166,6 +169,11 @@ foreach ($url_schemes as $url_scheme_name => $config) {
             // exchange the output string with the replaced one
             $output = $modx->resource->_output;
             $output = str_replace($resource_url,$new_url,$output);
+            if (!empty($config['custom_search_replace'])) {
+                foreach($config['custom_search_replace'] as $search => $replace) {
+                    $output = str_replace($search,$replace,$output);
+                }
+            }
             $modx->resource->_output = $output;
             return '';
             if ($redirector && $redirect && $resource_may_redirect[$resource_id] == true) {

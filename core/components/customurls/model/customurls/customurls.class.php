@@ -48,6 +48,7 @@ class customUrls {
         'set_placeholders' => true,             // will generate some placeholders on the page storing the object field values
         'placeholder_prefix' => 'customurls',   // the placeholder prefix to use if set_placeholders is true
         'display_placeholder' => 'display',     // the placeholder for the display value to use if set_placeholders is true
+        'custom_search_replace' => array(),     // an array of $search => $replace key/value pairs to str_replace through the processed content.
     );
     /**
      * @access protected
