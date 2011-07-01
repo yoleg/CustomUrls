@@ -29,6 +29,7 @@ class customUrls {
         'request_name_id' => 'id',              // $_REQUEST parameter for the value of the search_result_field
         'request_name_action' => 'action',      // $_REQUEST parameter for action (if found in the action map)
         'base_url' => '',                       // NOT the system base_url, just a prefix to add to all generated URLs
+        'lowercase_url' => true,                // Generates lowercase urls. Does not affect searches.
         'url_prefix' => '',                     // A prefix to append to the start of all urls
         'url_prefix_required' => true,          // Resolve the URL without the prefix?
         'url_suffix' => '',                     // A suffix to append to the end of all urls
@@ -131,15 +132,40 @@ class customUrls {
      * @param string $schema_name
      * @param string $object An instance of the object
      */
-    public function makeUrl($schema_name,$object) {
+    public function makeUrl($schema_name,$object,$action = '') {
+        return $this->makeFriendlyUrl($schema_name,$object,$action = '');
+    }
+    /**
+     * Generates a friendly URL for a particular schema
+     * @param string $schema_name
+     * @param string $object An instance of the object
+     */
+    public function makeFriendlyUrl($schema_name,$object,$action = '') {
         $schemas = $this->getUrlSchemas();
         $schema = isset($schemas[$schema_name]) ? $schemas[$schema_name] : '';
         if (empty($schema)) return '';
         if (!($object instanceof $schema['search_class'])) return '';
         $alias = urlencode($object->get($schema['search_field']));
         $output = $schema['base_url'].$schema['url_prefix'].$alias.$schema['url_suffix'];
+        if (!empty($action) && $this->validateAction($schema_name,$action)) {
+            $output .= $schema['url_delimiter'].$action;
+        }
+        if ($schema['lowercase_url']) {
+            $output = strtolower($output);
+        }
         return $output;
     }
+    /**
+     * validates that the action exists for this scheme
+     */
+    public function validateAction($schema_name,$action) {
+        $schemas = $this->getUrlSchemas();
+        $schema = isset($schemas[$schema_name]) ? $schemas[$schema_name] : '';
+        if (empty($schema)) return '';
+        $success = array_key_exists($action,$schema['action_map']);
+        return $success;
+    }
+
     /**
      * gets the REQUEST key for the schema
      * @param string $schema_name

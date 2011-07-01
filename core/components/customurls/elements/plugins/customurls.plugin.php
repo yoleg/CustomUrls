@@ -120,7 +120,7 @@ foreach ($url_schemes as $url_scheme_name => $config) {
             $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
             if ($config['set_placeholders']) {
                 $placeholders = array();
-                $placeholders[$ph_prefix.$config['display_placeholder']] = '';
+                $placeholders[$config['display_placeholder']] = '';
             }
         case 'OnWebPagePrerender' :     // after output is processed
             // ToDO: pass variables along in a class or something
@@ -151,7 +151,7 @@ foreach ($url_schemes as $url_scheme_name => $config) {
             if ($redirector) {
                 if ($config['set_placeholders']) {
                     $display_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $config['search_field'];
-                    $placeholders[$ph_prefix.$config['display_placeholder']] = $object->get($display_field);
+                    $placeholders[$config['display_placeholder']] = $object->get($display_field);
                     $object_array = $object->toArray();
                     $placeholders = array_merge($placeholders,$object_array);
                     $modx->setPlaceholders($placeholders,$ph_prefix);
