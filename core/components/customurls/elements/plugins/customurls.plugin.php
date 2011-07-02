@@ -66,16 +66,20 @@ foreach ($url_schemes as $url_scheme_name => $config) {
             $alias = $customurls->replaceFromStart($base_url,'',$alias);
             $alias = strtok($alias, "?");     // grabs everything before the first '?'
             $alias = trim($alias, '/');
-            // Divide by delimiter (slash by default) - returns array
-            $url_parts = explode($config['url_delimiter'], $alias);
+            $wall_objectname = $alias;
 
-            if (empty($url_parts[0])) continue;
-            $wall_objectname = $url_parts[0];
-            // Exit right away if required prefix or suffix is missing
+            // Exit right away if required prefix is missing
             if (!empty($config['url_prefix'])) {
                 if ($config['url_prefix_required'] && !$customurls->findFromStart($config['url_prefix'],$wall_objectname)) continue;
                 $wall_objectname = $customurls->replaceFromStart($config['url_prefix'],'',$wall_objectname);
             }
+
+            // Divide by delimiter (slash by default) - returns array
+            $url_parts = explode($config['url_delimiter'], $wall_objectname);
+            if (empty($url_parts[0])) continue;
+            $wall_objectname = $url_parts[0];
+
+            // Exit right away if required suffix is missing
             if (!empty($config['url_suffix'])) {
                 if ($config['url_suffix_required'] && !$customurls->findFromEnd($config['url_suffix'],$wall_objectname)) continue;
                 $wall_objectname = $customurls->replaceFromEnd($config['url_suffix'],'',$wall_objectname);
