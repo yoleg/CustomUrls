@@ -97,7 +97,7 @@ class customUrls {
      */
     public function parseUrl($url) {
         foreach ($this->schemas as $key => $schema) {
-            if ($schema->parseUrl($url)) return $key;
+            if ($schema->parseUrl($url)) return $schema;
         }
         return false;
     }

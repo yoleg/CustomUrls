@@ -58,7 +58,23 @@ foreach ($url_schemes as $name => $config) {
             $alias = trim($alias, '/');
             $wall_objectname = $alias;
             $schema = $customurls->parseUrl($alias);
-            if ($schema === false) return '';
+            if (empty($schema)) return '';
+
+            $object = $schema->getData('object');
+            $object_action = $schema->getData('object_action');
+            $object_id = $schema->getData('object_id');
+            if ($object_id && $object) {
+                $this->setData('object',$object);
+                $this->setData('object_id',$object_id);
+                $_REQUEST[$this->getRequestKey('id')] = $object_id;
+                $scheme_param = $this->modx->getOption('customurls.scheme_param_name',null,'customurls_scheme_name');
+                $_REQUEST[$scheme_param] = $this->key;
+            }
+            if (strval($object_action)) {
+                $_REQUEST[$this->getRequestKey('action')] = $object_action;
+            }
+            $this->modx->sendForward($this->config['landing_resource_id']);
+
             /* pass variables to target resource as GET parameters */
             break;
 
