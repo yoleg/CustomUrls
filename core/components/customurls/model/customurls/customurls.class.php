@@ -48,13 +48,13 @@ class customUrls {
         'set_placeholders' => true,             // will generate some placeholders on the page storing the object field values
         'placeholder_prefix' => 'customurls',   // the placeholder prefix to use if set_placeholders is true
         'display_placeholder' => 'display',     // the placeholder for the display value to use if set_placeholders is true
-        'custom_search_replace' => array(),     // an array of $search => $replace key/value pairs to str_replace through the processed content.
+        'custom_search_replace' => array(),     //
     );
     /**
      * @access protected
      * @var array The array of url schemes, already merged with defaults
      */
-    protected $schemes = array();
+    protected $schemas = array();
 
     /**
      * The customUrls Constructor.
@@ -69,115 +69,48 @@ class customUrls {
     function __construct(modX &$modx,array $config = array()) {
         $this->modx =& $modx;
         $this->config =& $config;
+        $defaults = $this->defaults;
+        $custom_defaults = $this->modx->fromJSON($this->modx->getOption('customurls.defaults',null,'[]'));
+        $defaults = array_merge($defaults,$custom_defaults);
+        $url_schemes = $this->modx->fromJSON($this->modx->getOption('customurls.schemes',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
+
+        // clean url_schemes
+        $resource_may_redirect = array();
+        $new_url_schemes = array();
+        foreach ($url_schemes as $name => $config) {
+            // ensure all options are set
+            $config = array_merge($defaults,$config);
+            $new_url_schemes[$name] = $config;
+        }
+        $url_schemes = $new_url_schemes;
+        $this->schamas = array();
+        foreach ($url_schemes as $name => $config) {
+            $config['key'] = $name;
+            $this->schamas[$name] = new cuScheme($modx,$config);
+        }
     }
 
     /**
-     * Checks if subject starts with search
-     * @param string $search
-     * @param string $subject
+     * Parses the url to see if it matches any of the schemas
+     * @param string $url The url to parse
+     * @return string|false The key of the schema or false if schema not fount
      */
-    public function getUrlSchemas() {
-        if (empty($this->schemes)) {
-            $defaults = $this->defaults;
-            $custom_defaults = $this->modx->fromJSON($this->modx->getOption('customurls.defaults',null,'[]'));
-            $defaults = array_merge($defaults,$custom_defaults);
-            $url_schemes = $this->modx->fromJSON($this->modx->getOption('customurls.schemes',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
-
-            // clean url_schemes
-            $resource_may_redirect = array();
-            $new_url_schemes = array();
-            foreach ($url_schemes as $name => $config) {
-                // ensure all options are set
-                $config = array_merge($defaults,$config);
-                $new_url_schemes[$name] = $config;
-            }
-             $url_schemes = $new_url_schemes;
-             $this->schemes = $url_schemes;
+    public function parseUrl($url) {
+        foreach ($this->schemas as $key => $schema) {
+            if ($schema->parseUrl($url)) return $key;
         }
-        return $this->schemes;
+        return false;
+    }
+    /**
+     * return the schema object
+     * @param string $key The schema key
+     * @return cuSchema The schema object
+     */
+    public function getSchema($key) {
+        if (!isset($this->schamas[$key]))
+        return $this->schamas[$key];
     }
 
-    /**
-     * Generates a URL for a particular schema
-     * @param string $schema_name
-     * @param string $field_name_config_key The configuration key that holds the name of the field to search by in the database table
-     * @param string $value The value that $field should be equal to
-     */
-    public function getObject($schema_name,$field_name_config_key,$field_value) {
-        $schemas = $this->getUrlSchemas();
-        $schema = isset($schemas[$schema_name]) ? $schemas[$schema_name] : '';
-        if (empty($schema)) return '';
-        $object = $this->modx->getObject($schema['search_class'],array_merge(array(
-            $schema[$field_name_config_key] => $field_value,
-        ),$schema['search_where']));
-        if (!($object instanceof $schema['search_class'])) return null;
-        return $object;
-    }
-    /**
-     * loads the service for a particular schema
-     * @param string $schema_name
-     */
-    public function loadService($schema_name) {
-        $schemas = $this->getUrlSchemas();
-        $config = isset($schemas[$schema_name]) ? $schemas[$schema_name] : '';
-        if (empty($config)) return null;
-        $load_modx_service_object = $this->modx->getService($config['load_modx_service']['name'],$config['load_modx_service']['class'],$this->modx->getOption($config['load_modx_service']['package'].'.core_path',null,$this->modx->getOption('core_path').'components/'.$config['load_modx_service']['package'].'/').'model/'.$config['load_modx_service']['package'].'/',$config['load_modx_service']['config']);
-        if (!($load_modx_service_object instanceof $config['load_modx_service']['class'])) {
-            $this->modx->log(modX::LOG_LEVEL_ERROR, 'Could not load FURL custom service: '.$config['load_modx_service']['name']);
-            return null;
-        }
-        return $load_modx_service_object;
-    }
-    /**
-     * Generates a URL for a particular schema
-     * @param string $schema_name
-     * @param string $object An instance of the object
-     */
-    public function makeUrl($schema_name,$object,$action = '') {
-        return $this->makeFriendlyUrl($schema_name,$object,$action = '');
-    }
-    /**
-     * Generates a friendly URL for a particular schema
-     * @param string $schema_name
-     * @param string $object An instance of the object
-     */
-    public function makeFriendlyUrl($schema_name,$object,$action = '') {
-        $schemas = $this->getUrlSchemas();
-        $schema = isset($schemas[$schema_name]) ? $schemas[$schema_name] : '';
-        if (empty($schema)) return '';
-        if (!($object instanceof $schema['search_class'])) return '';
-        $alias = urlencode($object->get($schema['search_field']));
-        $output = $schema['base_url'].$schema['url_prefix'].$alias.$schema['url_suffix'];
-        if (!empty($action) && $this->validateAction($schema_name,$action)) {
-            $output .= $schema['url_delimiter'].$action;
-        }
-        if ($schema['lowercase_url']) {
-            $output = strtolower($output);
-        }
-        return $output;
-    }
-    /**
-     * validates that the action exists for this scheme
-     */
-    public function validateAction($schema_name,$action) {
-        $schemas = $this->getUrlSchemas();
-        $schema = isset($schemas[$schema_name]) ? $schemas[$schema_name] : '';
-        if (empty($schema)) return '';
-        $success = array_key_exists($action,$schema['action_map']);
-        return $success;
-    }
-
-    /**
-     * gets the REQUEST key for the schema
-     * @param string $schema_name
-     */
-    public function getRequestKey($schema_name,$type = 'id') {
-        $schemas = $this->getUrlSchemas();
-        $config = isset($schemas[$schema_name]) ? $schemas[$schema_name] : '';
-        if (empty($config)) return '';
-        $output = isset($config['request_name_'.$type]) ? $config['request_prefix']. $config['request_name_'.$type] : '';
-        return $output;
-    }
     /**
      * Checks if subject starts with search
      * @param string $search
@@ -188,6 +121,7 @@ class customUrls {
         if (substr($subject,0, strlen($search))===$search) return true;
         return false;
     }
+
     /**
      * Checks if subject ends with search
      * @param string $search
