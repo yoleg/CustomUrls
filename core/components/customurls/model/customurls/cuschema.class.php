@@ -24,7 +24,7 @@ class cuSchema {
      */
     public  $config = array();
     /**
-     * @access public
+     * @access protected
      * @var string The unique schema identifier
      */
     protected  $key = '';
@@ -34,14 +34,19 @@ class cuSchema {
      */
     protected  $data = array();
     /**
+     * @access public
+     * @var array Stores the child schema objects of class cuSchema
+     */
+    public   $children = array();
+    /**
      * The cuScheme Constructor.
      *
      * This method is used to create a new cuScheme object.
      *
-     * @param customUrls &$customurls A reference to the customUrls object.
+     * @param customUrls $customurls A reference to the customUrls object.
      * @param array $config A collection of properties that modify cuScheme
      * behaviour.
-     * @return cuScheme A unique cuScheme instance.
+     * @return cuSchema A unique cuScheme instance.
      */
     function __construct(customUrls &$customurls,array $config = array()) {
         $this->cu =& $customurls;
@@ -98,6 +103,7 @@ class cuSchema {
      * @return bool True if match found, false otherwise
      */
     public function parseUrl($url) {
+        $original_url = $url;
         // Load ugm class
         // ToDO: add error checking
         if (!empty($this->config['load_modx_service'])) {
@@ -113,9 +119,11 @@ class cuSchema {
 
         // URL = alias.suffix.delimiter.remainder
         // Divide by delimiter (slash by default) - returns array
+        $url = trim($url,' /');
         $url_parts = explode($this->config['url_delimiter'], $url);
         if (empty($url_parts[0])) return false;
         $url = $url_parts[0];
+
 
         // URL = alias.suffix
         // Exit right away if required suffix is missing
@@ -123,7 +131,6 @@ class cuSchema {
             if ($this->config['url_suffix_required'] && !$this->cu->findFromEnd($this->config['url_suffix'],$url)) return false;
             $url = $this->cu->replaceFromEnd($this->config['url_suffix'],'',$url);
         }
-
         // URL = alias
         // URL_Remainder = alias
         /* Check if object exists and object is active */
@@ -140,9 +147,19 @@ class cuSchema {
 
         /* process remainder */
         $object_action = null;
-        $remainder = $this->cu->replaceFromStart($url_parts[0],'',$url);
+        $prefix = !empty($this->config['url_prefix']) ? $this->config['url_prefix'] : '';
+        $remainder = $this->cu->replaceFromStart($prefix.$url_parts[0],'',$original_url);
         $this->setData('remainder',$remainder);
-
+        $children = $this->children;
+        if (!empty($children) && !empty($remainder)) {
+            foreach ($children as $key => $child) {
+                $success = $child->parseUrl($remainder);
+                if ($success) {
+                    $this->setData('child',$child);
+                    break;
+                }
+            }
+        }
         $action_map = $this->config['action_map'];
         if (!empty($action_map) && !empty($remainder)) {
             // action is the part after the delimiter
@@ -169,6 +186,85 @@ class cuSchema {
         }
         return true;
     }
+    /**
+     * Sets the main object identifier and action to the REQUEST
+     * @param string $prefix An optional prefix to add.
+     * @return bool True
+     */
+    public function setRequest($prefix = '') {
+        $object = $this->getData('object');
+        $object_action = $this->getData('object_action');
+        $object_id = $this->getData('object_id');
+        if ($object_id && $object) {
+            $_REQUEST[$prefix.$this->getRequestKey('id')] = $object_id;
+        }
+        if (strval($object_action)) {
+            $_REQUEST[$prefix.$this->getRequestKey('action')] = $object_action;
+        }
+        $child = $this->getData('child');
+        if (!empty($child)) {
+            $child->setRequest();
+        }
+        return true;
+    }
+    /**
+     * Returns placeholders.
+     * The object fields are prefixed with the schema name.
+     * @param string $prefix An optional prefix to add
+     * @return array An array of placeholder keys and values
+     */
+    public function toArray($prefix = '') {
+        $config = $this->config;
+        // set prefix
+        $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
+        $prefix = $ph_prefix.$prefix;
+        // object to array
+        if (false) $object = new xPDOSimpleObject($this->modx);     // debug only
+        $object = $this->getData('object');
+        $array = $object->toArray($prefix.$this->get('key').'.');
+        // Set the display placeholder
+        $display_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $config['search_field'];
+        $array[$prefix.$config['display_placeholder']] = $object->get($display_field);
+        // merge with children
+        $child = $this->getData('child');
+        if (!empty($child)) {
+            $child_array = $child->toArray();
+            $array = !empty($child_array) ? array_merge($array,$child_array): array();
+        }
+        return $array;
+    }
+    /**
+     * Returns the landing resource (prefers child landings over parent landings)
+     * @return int The landing resource URL
+     */
+    public function getLanding() {
+        $landing = (int) $this->getData('resource');
+        $child = $this->getData('child');
+        if (!empty($child)) {
+            $child_landing = $child->getLanding();
+            $landing = !empty($child_landing) ? $child_landing : $landing;
+        }
+        return $landing;
+    }
+    /**
+     * Recursively runs the search-replace if the custom_search_replace is set for this or child schemas
+     * @param string $input The input string
+     * @return string The output string
+     */
+    public function customSearchReplace($input) {
+        $output = $input;
+        if (!empty($this->config['custom_search_replace'])) {
+            foreach($this->config['custom_search_replace'] as $search => $replace) {
+                $output = str_replace($search,$replace,$output);
+            }
+        }
+        $child = $this->getData('child');
+        if (!empty($child)) {
+            $output = $child->customSearchReplace($output);
+        }
+        return $output;
+    }
+
     /**
      * Generates a URL for a particular schema
      * @param string $field_name_config_key The configuration key that holds the name of the field to search by in the database table
@@ -203,16 +299,29 @@ class cuSchema {
     }
     /**
      * Generates a URL for a particular schema
-     * @param string $object An instance of the object
+     * @param string|array $object An instance of the object, or an array of objects (first will be used as main, all others as children)
      * @param string $action The optional action for the url
+     * @param array $children An array of child objects (ordered by depth)
      * @return string The url
      */
-    public function makeUrl($object,$action = '') {
+    public function makeUrl($object = null,$action = '',$children=array()) {
+        if (empty($object)) {
+            $object = $this->getData('object');
+        }
+        if (is_array($object)) {
+            $children = $object;
+            $object = array_shift($children);
+        }
         if (!($object instanceof $this->config['search_class'])) return '';
         $alias = urlencode($object->get($this->config['search_field']));
         $output = $this->config['base_url'].$this->config['url_prefix'].$alias.$this->config['url_suffix'];
+        $delimiter = $this->get('url_delimiter');
+        $child = empty($children) ? $this->getData('child') : array_shift($children);
+        if ($child instanceof cuSchema) {
+            $output .= $delimiter.$child->makeUrl(null,$action,$children);
+        }
         if (!empty($action) && $this->validateAction($action)) {
-            $output .= $this->config['url_delimiter'].$action;
+            $output .= $delimiter.$this->config['url_delimiter'].$action;
         }
         return $output;
     }

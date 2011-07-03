@@ -91,13 +91,32 @@ class customUrls {
             // merge config with defaults
             $config = array_merge($defaults,$config);
             // register landing page in resource map
-            $top_level = $config['run_without_parent'];
-            if (!$top_level) continue;
             $landing = $config['landing_resource_id'];
             if (empty($landing)) continue;
             $this->addLanding($landing,$schema_name);
             $config['key'] = $schema_name;
-            $this->schemas[$schema_name] = new cuSchema($this,$config);
+            // skip child-only schemas
+            $top_level = $config['run_without_parent'];
+            if (!$top_level) continue;
+            // calculate children
+            $children = $config['child_schemas'];
+            $processed_children = array();
+            if (!empty($children)) {
+                foreach ($children as $child) {
+                    if (!isset($url_schemes[$child])) continue;
+                    $child_config = array_merge($defaults,$url_schemes[$child]);
+                    $child_landing = $child_config['landing_resource_id'];
+                    if (empty($child_landing)) continue;
+                    $this->addLanding($landing,$schema_name);   // parent is registered as the owner of the landing page
+                    $child_config['key'] = $child;
+                    // create the child objects
+                    $processed_children[$child] = new cuSchema($this,$child_config);
+                }
+            }
+            // save the object
+            $schema = new cuSchema($this,$config);
+            if (!empty($processed_children)) $schema->children = $processed_children;
+            $this->schemas[$schema_name] = $schema;
         }
     }
     /**
@@ -196,10 +215,10 @@ class customUrls {
     /**
      * Parses the url to see if it matches any of the schemas
      * @param string $url The url to parse
-     * @return string|false The key of the schema or false if schema not fount
+     * @return cuSchema|null The schema if successful or null if not
      */
     public function parseUrl($url) {
-        $output = false;
+        $output = null;
         foreach ($this->schemas as $key => $schema) {
             if ($schema instanceof cuSchema && $schema->parseUrl($url)) {
                 $output = $schema;

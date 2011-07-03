@@ -41,80 +41,52 @@ $customurls = $modx->getService('customurls','customUrls',$modx->getOption('cust
 if (!($customurls instanceof customUrls)) {
     $customurls = new customUrls($modx,array());
 }
-$schema_param = $modx->getOption('customurls.schema_param_name',null,'customurls_schema_name');
-$validated_param = $modx->getOption('customurls.validated_param_name',null,'customurls_validated');
 
 // get the event name
 switch($event) {
-    case 'OnPageNotFound':
+    case 'OnPageNotFound':          // as soon as URL did not match any existing resource aliases
         $alias = $_SERVER['REQUEST_URI'];
         $base_url = $modx->getOption('base_url');
-        $alias = $customurls->replaceFromStart($base_url,'',$alias);
-        $alias = strtok($alias, "?");     // grabs everything before the first '?'
-        $alias = trim($alias, '/');
-        $wall_objectname = $alias;
+        $alias = $customurls->replaceFromStart($base_url,'',$alias);    // removes base_url - but only if found in beginning of URL
+        $alias = strtok($alias, "?");                                   // grabs everything before the first '?'
         $schema = $customurls->parseUrl($alias);
-        if (false) $schema = new cuSchema($customurls,array());        // for debugging only
-        if (!($schema instanceof cuSchema)) {
-            return '';
-        }
-        $object = $schema->getData('object');
-        $object_action = $schema->getData('object_action');
-        $object_id = $schema->getData('object_id');
-        if ($object_id && $object) {
-            $_REQUEST[$schema->getRequestKey('id')] = $object_id;
-            $_REQUEST[$schema_param] = $schema->get('key');
-        }
-        if (strval($object_action)) {
-            $_REQUEST[$schema->getRequestKey('action')] = $object_action;
-        }
-        $landing = (int) $schema->getData('resource');
+        if (false) $schema = new cuSchema($customurls,array());         // for debugging only
+        if (!($schema instanceof cuSchema)) return '';
+        $schema->setRequest();                                          // Adds data to the $_REQUEST parameter
+        $landing = (int) $schema->getLanding();
         $customurls->setCurrentSchema($schema);
         $modx->sendForward($landing);
         break;
 
     case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
-        $validation = $customurls->validateCurrentSchema();       // if redirect is required, sets
+        $validation = $customurls->validateCurrentSchema();             // if redirect is required, returns 'redirect'. Sets current schema to null if failed validation
         switch($validation) {
             case 'pass': break;
+            case 'fail': return '';
             case 'redirect': $modx->sendErrorPage();
             default: return '';
         }
-        $schema = $customurls->getCurrentSchema();
+        $schema = $customurls->getCurrentSchema();                      // gets the schema set by the OnPageNotFound event
         if (empty($schema) || !($schema instanceof cuSchema)) return '';
-        $config = $schema->config;
-        $object = $schema->getData('object');
         // set placeholders
-        $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
-        $placeholders = array();
-        if ($config['set_placeholders']) {
-            $placeholders[$config['display_placeholder']] = '';
-            $display_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $config['search_field'];
-            $placeholders[$config['display_placeholder']] = $object->get($display_field);
-            $object_array = $object->toArray();
-            $placeholders = array_merge($placeholders,$object_array);
-            $modx->setPlaceholders($placeholders,$ph_prefix);
-            // ToDo: set action placeholders (with verification that action exists)
+        $set_ph = $schema->get('set_placeholders');
+        if ($set_ph) {
+            $placeholders = $schema->toArray();
+            $modx->setPlaceholders($placeholders);
         }
         return '';
 
     case 'OnWebPagePrerender' :     // after output is processed
         // die();
-        $schema = $customurls->getCurrentSchema();
+        $schema = $customurls->getCurrentSchema();                      // gets the schema set by the OnPageNotFound event
         if (empty($schema) || !($schema instanceof cuSchema)) return '';
-        $config = $schema->config;
-        $object = $schema->getData('object');
         // get the old (resource) and new (object) url
         $resource_url = $modx->makeUrl($modx->resource->get('id'),'','');
-        $new_url = $schema->makeUrl($object);
+        $new_url = $schema->makeUrl();
         // exchange the output string with the replaced one
         $output = $modx->resource->_output;
         $output = str_replace($resource_url,$new_url,$output);
-        if (!empty($config['custom_search_replace'])) {
-            foreach($config['custom_search_replace'] as $search => $replace) {
-                $output = str_replace($search,$replace,$output);
-            }
-        }
+        $output = $schema->customSearchReplace($output);
         $modx->resource->_output = $output;
         break;
     default:
