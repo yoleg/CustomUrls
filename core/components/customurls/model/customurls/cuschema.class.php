@@ -7,8 +7,7 @@
  * @package ugmedia
  * @subpackage ugmedia
  */
-include_once dirname(__FILE__) . '/cuschema.class.php';
-class cuScheme {
+class cuSchema {
     /**
      * @access public
      * @var customUrls A reference to the customUrls object
@@ -23,7 +22,7 @@ class cuScheme {
      * @access public
      * @var array A config array.
      */
-    protected  $config = array();
+    public  $config = array();
     /**
      * @access public
      * @var string The unique schema identifier
@@ -47,7 +46,7 @@ class cuScheme {
     function __construct(customUrls &$customurls,array $config = array()) {
         $this->cu =& $customurls;
         $this->modx =& $customurls->modx;
-        if (!($this->modx instanceof modX)) {
+        if (false) {
             $this->modx = new modX();           // for debugging
         }
         $this->config =& $config;
@@ -92,6 +91,18 @@ class cuScheme {
         $this->config[$key] = $value;
         return $value;
     }
+    /**
+     * The landing page for this resource was accessed directly - do stuff
+     * @return bool True
+     */
+    public function accessedDirectly() {
+        $possible_schemas = $this->cu->getSchemasByLanding($this->get('landing_resource_id'));
+        $the_only_poss_schema = (count($possible_schemas) == 1) ? $possible_schemas[0] : false;
+        if ($the_only_poss_schema && $this->get('redirect_if_accessed_directly')) {
+            $this->modx->sendErrorPage();
+        }
+        return true;
+    }
 
     /**
      * Parses a particular URL to see if it matches this schema
@@ -105,7 +116,6 @@ class cuScheme {
             $service = $this->loadService();
             if (!$service) return false;
         }
-
         // Exit right away if required prefix is missing
         if (!empty($this->config['url_prefix'])) {
             if ($this->config['url_prefix_required'] && !$this->cu->findFromStart($this->config['url_prefix'],$url)) return false;
@@ -126,7 +136,10 @@ class cuScheme {
         $target = urldecode($url);
         $object = $this->getObject('search_field', $target);
         if (!$object) {return false;}
-        if (!empty($this->config['search_class_test_method']) && !$object->$this->config['search_class_test_method']()) {return false;}
+        $method = $this->config['search_class_test_method'];
+        if (!empty($method) && !($object->$method())) {
+            return false;
+        }
         $object_id = $object->get($this->config['search_result_field']);
         if (empty($object_id)) return false;
         $landing_resource_id = $this->config['landing_resource_id'];  // ToDo: check resource exists?
@@ -151,6 +164,7 @@ class cuScheme {
         }
         if ($object_id) {
             $this->setData('object',$object);
+            $this->setData('resource',$landing_resource_id);
             $this->setData('object_id',$object_id);
         }
         if (strval($object_action)) {
@@ -176,12 +190,19 @@ class cuScheme {
      * @return object The object fetched from the modx sercice
      */
     public function loadService() {
-        $load_modx_service_object = $this->modx->getService($this->config['load_modx_service']['name'],$this->config['load_modx_service']['class'],$this->modx->getOption($this->config['load_modx_service']['package'].'.core_path',null,$this->modx->getOption('core_path').'components/'.$this->config['load_modx_service']['package'].'/').'model/'.$this->config['load_modx_service']['package'].'/',$this->config['load_modx_service']['config']);
-        if (!($load_modx_service_object instanceof $this->config['load_modx_service']['class'])) {
+        $service_config = $this->config['load_modx_service'];
+        if (!is_array($service_config)) return null;
+        $name = $service_config['name'];
+        $class = $service_config['class'];
+        $package = $service_config['package'];
+        $config = $service_config['config'];
+        $path = $this->modx->getOption($package.'.core_path',null,$this->modx->getOption('core_path').'components/'.$package.'/').'model/'.$package.'/';
+        $service = $this->modx->getService($name,$class,$path,$config);
+        if (!($service instanceof $class)) {
             $this->modx->log(modX::LOG_LEVEL_ERROR, 'Could not load FURL custom service: '.$this->config['load_modx_service']['name']);
             return null;
         }
-        return $load_modx_service_object;
+        return $service;
     }
     /**
      * Generates a URL for a particular schema

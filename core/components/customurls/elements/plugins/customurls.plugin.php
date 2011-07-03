@@ -34,114 +34,116 @@ if (!in_array($event,$events)) return '';
 
 // Do not parse if friendly urls are off
 $friendly_urls = $modx->getOption('friendly_urls',null,false);
-if (empty($friendly_urls)) {
-    return '';
-}
+if (!$friendly_urls)    return '';
+
 // load the custom urls service
 $customurls = $modx->getService('customurls','customUrls',$modx->getOption('customurls.core_path',null,$modx->getOption('core_path').'components/customurls/').'model/customurls/',$scriptProperties);
 if (!($customurls instanceof customUrls)) {
-    return '';
+    $customurls = new customUrls($modx,array());
 }
-// see class file for defaults
-$url_schemes = $customurls->getUrlSchemas();
-$resource_may_redirect = array();
-foreach ($url_schemes as $name => $config) {
-    $resource_may_redirect[$config['landing_resource_id']] = isset($resource_may_redirect[$config['landing_resource_id']]) ? false : true;
-}
-    // get the event name
-    switch($event) {
-        case 'OnPageNotFound':
-            $alias = $_SERVER['REQUEST_URI'];
-            $base_url = $modx->getOption('base_url');
-            $alias = $customurls->replaceFromStart($base_url,'',$alias);
-            $alias = strtok($alias, "?");     // grabs everything before the first '?'
-            $alias = trim($alias, '/');
-            $wall_objectname = $alias;
-            $schema = $customurls->parseUrl($alias);
-            if (empty($schema)) return '';
+$schema_param = $customurls->config['schema_param'];
+$validated_param = $customurls->config['validated_param'];
 
-            $object = $schema->getData('object');
-            $object_action = $schema->getData('object_action');
-            $object_id = $schema->getData('object_id');
-            if ($object_id && $object) {
-                $this->setData('object',$object);
-                $this->setData('object_id',$object_id);
-                $_REQUEST[$this->getRequestKey('id')] = $object_id;
-                $scheme_param = $this->modx->getOption('customurls.scheme_param_name',null,'customurls_scheme_name');
-                $_REQUEST[$scheme_param] = $this->key;
-            }
-            if (strval($object_action)) {
-                $_REQUEST[$this->getRequestKey('action')] = $object_action;
-            }
-            $this->modx->sendForward($this->config['landing_resource_id']);
-
-            /* pass variables to target resource as GET parameters */
-            break;
-
-        case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
-            $redirector = isset($redirector) ? $redirector : true;
-            $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
-            if ($config['set_placeholders']) {
-                $placeholders = array();
-                $placeholders[$config['display_placeholder']] = '';
-            }
-        case 'OnWebPagePrerender' :     // after output is processed
-            // ToDO: pass variables along in a class or something
-            $redirector = isset($redirector) ? $redirector : false;
-            $redirect = false;
-            $resource_id = $modx->resource->get('id');
-
-            // only parse links on landing pages
-
-            if ($resource_id != $config['landing_resource_id']) continue;
-            if ($redirector && !$config['redirect_if_accessed_directly'] && !$config['redirect_if_object_not_found'] && !$config['replace_page_titles']) continue;
-            // get the request info
-            $request_param = $customurls->getRequestKey($url_scheme_name,'id');
-            $objectid = isset($_REQUEST[$request_param]) ? $_REQUEST[$request_param] : 0;
-            // get the object request refers to
-            if (empty($objectid)) {
-                if ($redirector && $config['redirect_if_accessed_directly']){
-                    $redirect = true;
-                }
-                continue;
-            }
-            $object = $customurls->getObject($url_scheme_name,'search_result_field',$objectid);
-            if (!$object) {
-                if ($redirector && $config['redirect_if_object_not_found']) {
-                    $redirect = true;
-                }
-                continue;
-            }
-            if ($redirector) {
-                if ($config['set_placeholders']) {
-                    $display_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $config['search_field'];
-                    $placeholders[$config['display_placeholder']] = $object->get($display_field);
-                    $object_array = $object->toArray();
-                    $placeholders = array_merge($placeholders,$object_array);
-                    $modx->setPlaceholders($placeholders,$ph_prefix);
-                    // ToDo: set action placeholders (with verification that action exists)
-                }
-                continue;   // no more processing needed for this event...
-            }
-            if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {continue;}
-            // get the old (resource) and new (object) url
-            $resource_url = $modx->makeUrl($resource_id,'','');
-            $new_url = $customurls->makeUrl($url_scheme_name,$object);
-            // exchange the output string with the replaced one
-            $output = $modx->resource->_output;
-            $output = str_replace($resource_url,$new_url,$output);
-            if (!empty($config['custom_search_replace'])) {
-                foreach($config['custom_search_replace'] as $search => $replace) {
-                    $output = str_replace($search,$replace,$output);
-                }
-            }
-            $modx->resource->_output = $output;
+// get the event name
+switch($event) {
+    case 'OnPageNotFound':
+        $alias = $_SERVER['REQUEST_URI'];
+        $base_url = $modx->getOption('base_url');
+        $alias = $customurls->replaceFromStart($base_url,'',$alias);
+        $alias = strtok($alias, "?");     // grabs everything before the first '?'
+        $alias = trim($alias, '/');
+        $wall_objectname = $alias;
+        $schema = $customurls->parseUrl($alias);
+        if (!($schema instanceof cuSchema)) {
             return '';
-            if ($redirector && $redirect && $resource_may_redirect[$resource_id] == true) {
-                $modx->sendErrorPage();
+            $schema = new cuSchema($customurls,array());        // for debugging
+        }
+        $object = $schema->getData('object');
+        $object_action = $schema->getData('object_action');
+        $object_id = $schema->getData('object_id');
+        if ($object_id && $object) {
+            $_REQUEST[$schema->getRequestKey('id')] = $object_id;
+            $_REQUEST[$schema_param] = $schema->get('key');
+        }
+        if (strval($object_action)) {
+            $_REQUEST[$schema->getRequestKey('action')] = $object_action;
+        }
+        $landing = (int) $schema->getData('resource');
+        $modx->sendForward($landing);
+        break;
+
+    case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
+        $_REQUEST[$validated_param] = false;
+        $possible_schemas = $customurls->getSchemasByLanding($modx->resource->get('id'));
+        if (empty($possible_schemas) || !is_array($possible_schemas)) {
+            return '';
+        }
+        $schema_name = $modx->getOption($schema_param,$_REQUEST,null);
+        if (empty($schema_name) || in_array($schema_name,$possible_schemas)) {
+            foreach($possible_schemas as $schema_name) {
+                $schema = $customurls->getSchema($schema_name);
+                $schema->accessedDirectly();        // may redirect to errorPage
             }
-            break;
-        default:
-            break;
+            return '';
+        }
+        $schema = $customurls->getSchema($schema_name);
+        if (!($schema instanceof cuSchema)) {
+            return '';                              // something went wrong
+        }
+        $config = $schema->config;
+        $resource = $schema->getData('resource');   // only set if redirected by onPageNotFound event
+        if (empty($resource)) {
+            $schema->accessedDirectly();            // may redirect to errorPage
+            return '';
+        }
+        if ($resource != $modx->resource->get('id')) {
+            return '';                              // something went wrong
+        }
+        // check object
+        $object = $schema->getData('object');
+        if (!$object) {
+            if ($config['redirect_if_object_not_found']) $modx->sendErrorPage();
+            return '';
+        }
+        if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {return '';}
+        // set placeholders
+        $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
+        if ($config['set_placeholders']) {
+            $placeholders = array();
+            $placeholders[$config['display_placeholder']] = '';
+            $display_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $config['search_field'];
+            $placeholders[$config['display_placeholder']] = $object->get($display_field);
+            $object_array = $object->toArray();
+            $placeholders = array_merge($placeholders,$object_array);
+            $modx->setPlaceholders($placeholders,$ph_prefix);
+            // ToDo: set action placeholders (with verification that action exists)
+        }
+        return '';
+
+    case 'OnWebPagePrerender' :     // after output is processed
+
+        // get the request info
+        $request_param = $customurls->getRequestKey($url_scheme_name,'id');
+        $objectid = isset($_REQUEST[$request_param]) ? $_REQUEST[$request_param] : 0;
+        // get the object request refers to
+        if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {continue;}
+        // get the old (resource) and new (object) url
+        $resource_url = $modx->makeUrl($resource_id,'','');
+        $new_url = $customurls->makeUrl($url_scheme_name,$object);
+        // exchange the output string with the replaced one
+        $output = $modx->resource->_output;
+        $output = str_replace($resource_url,$new_url,$output);
+        if (!empty($config['custom_search_replace'])) {
+            foreach($config['custom_search_replace'] as $search => $replace) {
+                $output = str_replace($search,$replace,$output);
+            }
+        }
+        $modx->resource->_output = $output;
+        if ($redirector && $redirect && $resource_may_redirect[$resource_id] == true) {
+            $modx->sendErrorPage();
+        }
+        break;
+    default:
+        break;
 }
 return '';

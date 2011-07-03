@@ -8,6 +8,7 @@
  * @subpackage ugmedia
  *
  */
+include_once dirname(__FILE__).'/cuschema.class.php';
 class customUrls {
     /**
      * @access public
@@ -51,10 +52,20 @@ class customUrls {
         'custom_search_replace' => array(),     //
     );
     /**
-     * @access protected
+     * @access public
      * @var array The array of url schemes, already merged with defaults
      */
-    protected $schemas = array();
+    public $schemas = array();
+    /**
+     * @access public
+     * @var array A an array of resource ids to their corresponding array of schema names
+     */
+    public $resources = array();
+    /**
+     * @access public
+     * @var cuSchema The instance of the schema being currently used on the document
+     */
+    public $current_schema = null;
 
     /**
      * The customUrls Constructor.
@@ -68,26 +79,64 @@ class customUrls {
      */
     function __construct(modX &$modx,array $config = array()) {
         $this->modx =& $modx;
-        $this->config =& $config;
+        $this->config = array_merge(array(
+            'scheme_param' => $modx->getOption('customurls.schema_param_name',null,'customurls_schema_name'),
+            'validated_param' => $modx->getOption('customurls.validated_param_name',null,'customurls_validated'),
+        ),$config);
         $defaults = $this->defaults;
         $custom_defaults = $this->modx->fromJSON($this->modx->getOption('customurls.defaults',null,'[]'));
         $defaults = array_merge($defaults,$custom_defaults);
         $url_schemes = $this->modx->fromJSON($this->modx->getOption('customurls.schemes',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
-
-        // clean url_schemes
-        $resource_may_redirect = array();
-        $new_url_schemes = array();
-        foreach ($url_schemes as $name => $config) {
-            // ensure all options are set
+        // clean and register url schemes
+        foreach ($url_schemes as $schema_name => $config) {
+            // merge config with defaults
             $config = array_merge($defaults,$config);
-            $new_url_schemes[$name] = $config;
+            // register landing page in resource array
+            $landing = $config['landing_resource_id'];
+            if (empty($landing)) continue;
+            $this->addLanding($landing,$schema_name);
+            $config['key'] = $schema_name;
+            $this->schemas[$schema_name] = new cuSchema($this,$config);
         }
-        $url_schemes = $new_url_schemes;
-        $this->schamas = array();
-        foreach ($url_schemes as $name => $config) {
-            $config['key'] = $name;
-            $this->schamas[$name] = new cuScheme($modx,$config);
+    }
+    /**
+     * Registers a landing-page, schema name pair
+     * @param int $landing The landing resource
+     * @param string $schema_name The name of the schema
+     * @return array The current array of landing pages
+     */
+    protected function addLanding($landing,$schema_name) {
+        if (!isset($this->resources[$landing])) {
+            $this->resources[$landing] = array();
         }
+        $this->resources[$landing] = array($schema_name);
+        return $this->resources[$landing];
+    }
+    /**
+     * Gets the schemas using a particular resource as a landing page
+     * @param int $landing The landing resource
+     * @return array An array of schema names for this resource
+     */
+    public function getSchemasByLanding($landing) {
+        if (!isset($this->resources[$landing])) return array();
+        return $this->resources[$landing];
+    }
+    /**
+     * Gets and validates the schema object currently in use by the page
+     * @return cuSchema|null The schema object or null
+     */
+    public function getCurrentSchema() {
+        if (empty($this->current_schema)) return null;
+        return $this->current_schema;
+    }
+    /**
+     * Sets the schema object currently in use by the page
+     * @param cuSchema|null $schema The schema object or null
+     * @return cuSchema|null The schema object or null
+     */
+    public function setCurrentSchema($schema) {
+        if (empty($this->current_schema)) return null;
+        return $this->current_schema;
     }
 
     /**
@@ -97,7 +146,9 @@ class customUrls {
      */
     public function parseUrl($url) {
         foreach ($this->schemas as $key => $schema) {
-            if ($schema->parseUrl($url)) return $schema;
+            if ($schema->parseUrl($url)) {
+                return $schema;
+            }
         }
         return false;
     }
@@ -107,8 +158,12 @@ class customUrls {
      * @return cuSchema The schema object
      */
     public function getSchema($key) {
-        if (!isset($this->schamas[$key]))
-        return $this->schamas[$key];
+        if (!isset($this->schemas[$key])) return null;
+        if (!($this->schemas[$key] instanceof cuSchema)) {
+            unset($this->schemas[$key]);
+            return null;
+        }
+        return $this->schemas[$key];
     }
 
     /**
