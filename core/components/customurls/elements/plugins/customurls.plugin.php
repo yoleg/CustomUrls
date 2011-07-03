@@ -41,8 +41,8 @@ $customurls = $modx->getService('customurls','customUrls',$modx->getOption('cust
 if (!($customurls instanceof customUrls)) {
     $customurls = new customUrls($modx,array());
 }
-$schema_param = $customurls->config['schema_param'];
-$validated_param = $customurls->config['validated_param'];
+$schema_param = $modx->getOption('customurls.schema_param_name',null,'customurls_schema_name');
+$validated_param = $modx->getOption('customurls.validated_param_name',null,'customurls_validated');
 
 // get the event name
 switch($event) {
@@ -69,43 +69,18 @@ switch($event) {
             $_REQUEST[$schema->getRequestKey('action')] = $object_action;
         }
         $landing = (int) $schema->getData('resource');
+        $customurls->setCurrentSchema($schema);
         $modx->sendForward($landing);
         break;
 
     case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
-        $_REQUEST[$validated_param] = false;
-        $possible_schemas = $customurls->getSchemasByLanding($modx->resource->get('id'));
-        if (empty($possible_schemas) || !is_array($possible_schemas)) {
-            return '';
-        }
-        $schema_name = $modx->getOption($schema_param,$_REQUEST,null);
-        if (empty($schema_name) || in_array($schema_name,$possible_schemas)) {
-            foreach($possible_schemas as $schema_name) {
-                $schema = $customurls->getSchema($schema_name);
-                $schema->accessedDirectly();        // may redirect to errorPage
-            }
-            return '';
-        }
-        $schema = $customurls->getSchema($schema_name);
-        if (!($schema instanceof cuSchema)) {
-            return '';                              // something went wrong
-        }
+        return '';
+        $customurls->validateCurrentSchema();       // may redirect to errorPage and/or set current schema to null
+
+        $schema = $customurls->getCurrentSchema();
+        if (empty($schema) || !($schema instanceof cuSchema)) return '';
         $config = $schema->config;
-        $resource = $schema->getData('resource');   // only set if redirected by onPageNotFound event
-        if (empty($resource)) {
-            $schema->accessedDirectly();            // may redirect to errorPage
-            return '';
-        }
-        if ($resource != $modx->resource->get('id')) {
-            return '';                              // something went wrong
-        }
-        // check object
         $object = $schema->getData('object');
-        if (!$object) {
-            if ($config['redirect_if_object_not_found']) $modx->sendErrorPage();
-            return '';
-        }
-        if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {return '';}
         // set placeholders
         $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
         if ($config['set_placeholders']) {
@@ -121,15 +96,15 @@ switch($event) {
         return '';
 
     case 'OnWebPagePrerender' :     // after output is processed
-
-        // get the request info
-        $request_param = $customurls->getRequestKey($url_scheme_name,'id');
-        $objectid = isset($_REQUEST[$request_param]) ? $_REQUEST[$request_param] : 0;
-        // get the object request refers to
-        if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {continue;}
+        // die();
+        return '';
+        $schema = $customurls->getCurrentSchema();
+        if (empty($schema) || !($schema instanceof cuSchema)) return '';
+        $config = $schema->config;
+        $object = $schema->getData('object');
         // get the old (resource) and new (object) url
-        $resource_url = $modx->makeUrl($resource_id,'','');
-        $new_url = $customurls->makeUrl($url_scheme_name,$object);
+        $resource_url = $modx->makeUrl($modx->resource->get('id'),'','');
+        $new_url = $schema->makeUrl($object);
         // exchange the output string with the replaced one
         $output = $modx->resource->_output;
         $output = str_replace($resource_url,$new_url,$output);
@@ -139,9 +114,6 @@ switch($event) {
             }
         }
         $modx->resource->_output = $output;
-        if ($redirector && $redirect && $resource_may_redirect[$resource_id] == true) {
-            $modx->sendErrorPage();
-        }
         break;
     default:
         break;

@@ -72,17 +72,14 @@ class customUrls {
      *
      * This method is used to create a new customUrls object.
      *
-     * @param modX &$this->modx A reference to the modX object.
+     * @param modX $modx A reference to the modX object.
      * @param array $config A collection of properties that modify customUrls
      * behaviour.
      * @return customUrls A unique customUrls instance.
      */
     function __construct(modX &$modx,array $config = array()) {
         $this->modx =& $modx;
-        $this->config = array_merge(array(
-            'scheme_param' => $modx->getOption('customurls.schema_param_name',null,'customurls_schema_name'),
-            'validated_param' => $modx->getOption('customurls.validated_param_name',null,'customurls_validated'),
-        ),$config);
+        $this->config = $config;
         $defaults = $this->defaults;
         $custom_defaults = $this->modx->fromJSON($this->modx->getOption('customurls.defaults',null,'[]'));
         $defaults = array_merge($defaults,$custom_defaults);
@@ -122,7 +119,7 @@ class customUrls {
         return $this->resources[$landing];
     }
     /**
-     * Gets and validates the schema object currently in use by the page
+     * Gets the schema object currently in use by the page
      * @return cuSchema|null The schema object or null
      */
     public function getCurrentSchema() {
@@ -130,12 +127,57 @@ class customUrls {
         return $this->current_schema;
     }
     /**
+     * Validates the schema object currently in use by the page
+     * @return bool True if valid
+     */
+    public function validateCurrentSchema() {
+        $possible_schemas = $this->getSchemasByLanding($this->modx->resource->get('id'));
+        if (empty($possible_schemas) || !is_array($possible_schemas)) {
+            $this->setCurrentSchema(null);
+            return false;
+        }
+        $schema = $this->getCurrentSchema();
+        $schema_name = ($schema && ($schema instanceof cuSchema)) ? $schema->get('key') : '';
+        if (empty($schema_name) || !in_array($schema_name,$possible_schemas)) {
+            foreach($possible_schemas as $schema_name) {
+                $schema = $this->getSchema($schema_name);
+                $schema->accessedDirectly();        // may redirect to errorPage
+            }
+            $this->setCurrentSchema(null);
+            return false;
+        }
+        $config = $schema->config;
+        $resource = $schema->getData('resource');   // only set if redirected by onPageNotFound event
+        if (empty($resource)) {
+            $schema->accessedDirectly();            // may redirect to errorPage
+            $this->setCurrentSchema(null);
+            return false;
+        }
+        if ($resource != $this->modx->resource->get('id')) {
+            $this->setCurrentSchema(null);    // prevents the next event from executing
+            return false;
+        }
+        // check object
+        $object = $schema->getData('object');
+        if (!$object) {
+            if ($config['redirect_if_object_not_found']) $this->modx->sendErrorPage();
+            $this->setCurrentSchema(null);
+            return false;
+        }
+        if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {
+            $this->setCurrentSchema(null);
+            return false;
+        }
+        return true;
+    }
+    /**
      * Sets the schema object currently in use by the page
-     * @param cuSchema|null $schema The schema object or null
-     * @return cuSchema|null The schema object or null
+     * @param cuSchema|null $schema The schema object to set
+     * @return cuSchema|false The schema object or false if failed
      */
     public function setCurrentSchema($schema) {
-        if (empty($this->current_schema)) return null;
+        if (!($schema instanceof cuSchema)) return false;
+        $this->current_schema = $schema;
         return $this->current_schema;
     }
 
@@ -153,11 +195,25 @@ class customUrls {
         return false;
     }
     /**
+     * Returns a url from the object and schema name
+     * @param object $object The object to make the url from
+     * @param string $schema_name The schema name
+     * @param string $action The action
+     * @return string The url
+     */
+    public function makeUrl($object,$schema_name,$action = '') {
+        $schema = $this->getSchema($schema_name);
+        if (!($schema instanceof cuSchema)) return '';
+        $output = $schema->makeUrl($object,$action);
+        return $output;
+    }
+    /**
      * return the schema object
      * @param string $key The schema key
      * @return cuSchema The schema object
      */
     public function getSchema($key) {
+        $key = (string) $key;
         if (!isset($this->schemas[$key])) return null;
         if (!($this->schemas[$key] instanceof cuSchema)) {
             unset($this->schemas[$key]);
