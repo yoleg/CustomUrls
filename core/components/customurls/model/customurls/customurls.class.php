@@ -22,7 +22,7 @@ class customUrls {
     public $config = array();
     /**
      * @access protected
-     * @var array The array of default url scheme options
+     * @var array The array of default url schema options
      */
     protected $defaults = array(
         'landing_resource_id' => 0,             // the resource id to redirect to
@@ -40,7 +40,7 @@ class customUrls {
         'search_class' => 'modUser',            // the xpdo class for the database table to search through
         'search_field' => 'username',           // the field to use in the URL
         'search_result_field' => 'id',          // the field to pass to the resource via the request_name_id
-        'search_display_field' => '',           // the field to set in a special "display" placeholder to allow you to use the same placeholder for multiple schemes (defaults to search field)
+        'search_display_field' => '',           // the field to set in a special "display" placeholder to allow you to use the same placeholder for multiple schemas (defaults to search field)
         'search_where' => array('active' => 1), // an additional filter for the database query (xpdo where)
         'search_class_test_method' => '',       // a method name of the class to run. If resolves to false, will not continue. Useful for permissions checking.
         'action_map' => array(),                // an array of keys (action names) and values (resource ids) to use for the sub-actions
@@ -55,7 +55,7 @@ class customUrls {
     );
     /**
      * @access public
-     * @var array The array of url schemes, already merged with defaults
+     * @var array The array of url schemas, already merged with defaults
      */
     public $schemas = array();
     /**
@@ -85,9 +85,9 @@ class customUrls {
         $defaults = $this->defaults;
         $custom_defaults = $this->modx->fromJSON($this->modx->getOption('customurls.defaults',null,'[]'));
         $defaults = array_merge($defaults,$custom_defaults);
-        $url_schemes = $this->modx->fromJSON($this->modx->getOption('customurls.schemes',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
-        // clean and register url schemes
-        foreach ($url_schemes as $schema_name => $config) {
+        $url_schemas = $this->modx->fromJSON($this->modx->getOption('customurls.schemas',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
+        // clean and register url schemas
+        foreach ($url_schemas as $schema_name => $config) {
             // merge config with defaults
             $config = array_merge($defaults,$config);
             // register landing page in resource map
@@ -103,8 +103,8 @@ class customUrls {
             $processed_children = array();
             if (!empty($children)) {
                 foreach ($children as $child) {
-                    if (!isset($url_schemes[$child])) continue;
-                    $child_config = array_merge($defaults,$url_schemes[$child]);
+                    if (!isset($url_schemas[$child])) continue;
+                    $child_config = array_merge($defaults,$url_schemas[$child]);
                     $child_landing = $child_config['landing_resource_id'];
                     if (empty($child_landing)) continue;
                     $this->addLanding($landing,$schema_name);   // parent is registered as the owner of the landing page

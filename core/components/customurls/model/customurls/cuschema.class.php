@@ -326,7 +326,7 @@ class cuSchema {
         return $output;
     }
     /**
-     * Checks that the action is in the action map for this scheme
+     * Checks that the action is in the action map for this schema
      * @param string $action An instance of the object
      * @return bool True if successful
      */
