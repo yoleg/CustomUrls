@@ -36,8 +36,8 @@ class customUrls {
         'url_suffix' => '',                     // A suffix to append to the end of all urls
         'url_suffix_required' => true,          // Resolve the URL without the suffix?
         'url_delimiter' => '/',                 // The separator between the main URL and the action
-        'load_modx_service' => array(),         // loads as service if not empty. Must have the following keys set: 'name', 'class', 'package', and 'config' (config is an array)
-        'search_class' => 'modUser',            // the xpdo class for the database table to search through
+        'load_modx_service' => array(),         // loads as service if not empty. Must have the following keys set: 'name', 'class', 'package' OR 'path', and 'config' (config is an array). If you specify a lowercase package name, the path will be generated automatically for you based on either package.core_path setting or the default component structure.
+        'search_class' => 'modUser',            // the xPDOObject class for the database table to search through
         'search_field' => 'username',           // the field to use in the URL
         'search_result_field' => 'id',          // the field to pass to the resource via the request_name_id
         'search_display_field' => '',           // the field to set in a special "display" placeholder to allow you to use the same placeholder for multiple schemas (defaults to search field)
@@ -51,8 +51,9 @@ class customUrls {
         'display_placeholder' => 'display',     // the placeholder for the display value to use if set_placeholders is true
         'custom_search_replace' => array(),     // an array of search => replace pairs to str_replace the output with
         'run_without_parent' => true,           // if set to false, will not be run unless called by another schema in the child_schemas array
-        'child_schemas' => array(),             // an array of schema_name => (array) overrides to run the URL remainder through
+        'child_schemas' => array(),             // an array of schema_names OR schema_name => (array) overrides to run the URL remainder through
     );
+
     /**
      * @access public
      * @var array The array of url schemas, already merged with defaults
@@ -102,9 +103,13 @@ class customUrls {
             $children = $config['child_schemas'];
             $processed_children = array();
             if (!empty($children)) {
-                foreach ($children as $child) {
+                foreach ($children as $child => $child_config) {
+                    if (is_numeric($child)) {
+                        $child = $child_config;                          // allow simple array of schema names
+                        $child_config = array();
+                    }
                     if (!isset($url_schemas[$child])) continue;
-                    $child_config = array_merge($defaults,$url_schemas[$child]);
+                    $child_config = array_merge($defaults,$url_schemas[$child],$child_config);
                     $child_landing = $child_config['landing_resource_id'];
                     if (empty($child_landing)) continue;
                     $this->addLanding($landing,$schema_name);   // parent is registered as the owner of the landing page
@@ -229,15 +234,18 @@ class customUrls {
     
     /**
      * Returns a url from the object and schema name
-     * @param object $object The object to make the url from
+     * Basically passes all other parameters to the makeUrl method of the schema object specified by $schema_name
+     * @see cuSchema::makeUrl
+     * @param string|array $object An instance of the object, or an array of objects (first will be used as main, all others as children)
      * @param string $schema_name The schema name
-     * @param string $action The action
+     * @param string $action The optional action for the url
+     * @param array $children An array of child objects (ordered by depth)
      * @return string The url
      */
-    public function makeUrl($object,$schema_name,$action = '') {
+    public function makeUrl($object=null,$schema_name,$action = '',$children=array()) {
         $schema = $this->getSchema($schema_name);
         if (!($schema instanceof cuSchema)) return '';
-        $output = $schema->makeUrl($object,$action);
+        $output = $schema->makeUrl($object,$action,$children);
         return $output;
     }
     /**

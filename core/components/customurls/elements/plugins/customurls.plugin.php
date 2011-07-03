@@ -24,7 +24,7 @@
  */
 /**
  * Url format: [[++base_url]][[+prefix]]databaseSearchField[[+suffix]]
- * Action url: [[++base_url]][[+prefix]]databaseSearchField[[+suffix]][[+delimiter]]action
+ * Action url: [[++base_url]][[+prefix]]databaseSearchField[[+suffix]][[+delimiter]]action-or-child-schema
  * ToDo: use RegExp or other method to add flexibility to URLs
 */
 $event = $modx->event->name;
@@ -50,11 +50,11 @@ switch($event) {
         $alias = $customurls->replaceFromStart($base_url,'',$alias);    // removes base_url - but only if found in beginning of URL
         $alias = strtok($alias, "?");                                   // grabs everything before the first '?'
         $schema = $customurls->parseUrl($alias);
-        if (false) $schema = new cuSchema($customurls,array());         // for debugging only
+        if (false) $schema = new cuSchema($customurls,array());         // for debugging only - never happens
         if (!($schema instanceof cuSchema)) return '';
         $schema->setRequest();                                          // Adds data to the $_REQUEST parameter
-        $landing = (int) $schema->getLanding();
-        $customurls->setCurrentSchema($schema);
+        $landing = (int) $schema->getLanding();                         // prefers child landings over parent landings
+        $customurls->setCurrentSchema($schema);                         // saves for use by later events
         $modx->sendForward($landing);
         break;
 

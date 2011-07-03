@@ -280,7 +280,7 @@ class cuSchema {
     }
     /**
      * loads the service for this schema
-     * @return object The object fetched from the modx sercice
+     * @return object The object fetched from the modx service
      */
     public function loadService() {
         $service_config = $this->config['load_modx_service'];
@@ -289,7 +289,8 @@ class cuSchema {
         $class = $service_config['class'];
         $package = $service_config['package'];
         $config = $service_config['config'];
-        $path = $this->modx->getOption($package.'.core_path',null,$this->modx->getOption('core_path').'components/'.$package.'/').'model/'.$package.'/';
+        $path = $service_config['path'];
+        $path = !empty($path) ? $path : $this->modx->getOption($package.'.core_path',null,$this->modx->getOption('core_path').'components/'.$package.'/').'model/'.$package.'/';
         $service = $this->modx->getService($name,$class,$path,$config);
         if (!($service instanceof $class)) {
             $this->modx->log(modX::LOG_LEVEL_ERROR, 'Could not load FURL custom service: '.$this->config['load_modx_service']['name']);
