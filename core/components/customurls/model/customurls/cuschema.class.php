@@ -91,18 +91,6 @@ class cuSchema {
         $this->config[$key] = $value;
         return $value;
     }
-    /**
-     * The landing page for this resource was accessed directly - do stuff
-     * @return bool True
-     */
-    public function accessedDirectly() {
-        $possible_schemas = $this->cu->getSchemasByLanding($this->get('landing_resource_id'));
-        $the_only_poss_schema = (count($possible_schemas) == 1) ? $possible_schemas[0] : false;
-        if ($the_only_poss_schema && $this->get('redirect_if_accessed_directly')) {
-            $this->modx->sendErrorPage();
-        }
-        return true;
-    }
 
     /**
      * Parses a particular URL to see if it matches this schema
@@ -116,22 +104,28 @@ class cuSchema {
             $service = $this->loadService();
             if (!$service) return false;
         }
+        // URL = prefix.alias.suffix.delimiter.remainder
         // Exit right away if required prefix is missing
         if (!empty($this->config['url_prefix'])) {
             if ($this->config['url_prefix_required'] && !$this->cu->findFromStart($this->config['url_prefix'],$url)) return false;
             $url = $this->cu->replaceFromStart($this->config['url_prefix'],'',$url);
         }
 
+        // URL = alias.suffix.delimiter.remainder
         // Divide by delimiter (slash by default) - returns array
         $url_parts = explode($this->config['url_delimiter'], $url);
         if (empty($url_parts[0])) return false;
         $url = $url_parts[0];
 
+        // URL = alias.suffix
         // Exit right away if required suffix is missing
         if (!empty($this->config['url_suffix'])) {
             if ($this->config['url_suffix_required'] && !$this->cu->findFromEnd($this->config['url_suffix'],$url)) return false;
             $url = $this->cu->replaceFromEnd($this->config['url_suffix'],'',$url);
         }
+
+        // URL = alias
+        // URL_Remainder = alias
         /* Check if object exists and object is active */
         $target = urldecode($url);
         $object = $this->getObject('search_field', $target);
@@ -144,12 +138,15 @@ class cuSchema {
         if (empty($object_id)) return false;
         $landing_resource_id = $this->config['landing_resource_id'];  // ToDo: check resource exists?
 
-        /* check for a object sub-action if URL in the form of "object/action" */
+        /* process remainder */
         $object_action = null;
+        $remainder = $this->cu->replaceFromStart($url_parts[0],'',$url);
+        $this->setData('remainder',$remainder);
+
         $action_map = $this->config['action_map'];
-        if (!empty($action_map) && count($url_parts) > 1) {
+        if (!empty($action_map) && !empty($remainder)) {
             // action is the part after the delimiter
-            $url_action = $this->cu->replaceFromStart($url_parts[0],'',$url);
+            $url_action = $remainder;
             $landing_resource_id = false;
             // Parse the wall_action_ids
             foreach ($action_map as $action_name => $resource_id) {

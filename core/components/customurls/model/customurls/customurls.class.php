@@ -49,7 +49,9 @@ class customUrls {
         'set_placeholders' => true,             // will generate some placeholders on the page storing the object field values
         'placeholder_prefix' => 'customurls',   // the placeholder prefix to use if set_placeholders is true
         'display_placeholder' => 'display',     // the placeholder for the display value to use if set_placeholders is true
-        'custom_search_replace' => array(),     //
+        'custom_search_replace' => array(),     // an array of search => replace pairs to str_replace the output with
+        'run_without_parent' => true,           // if set to false, will not be run unless called by another schema in the child_schemas array
+        'child_schemas' => array(),             // an array of schema_name => (array) overrides to run the URL remainder through
     );
     /**
      * @access public
@@ -88,7 +90,9 @@ class customUrls {
         foreach ($url_schemes as $schema_name => $config) {
             // merge config with defaults
             $config = array_merge($defaults,$config);
-            // register landing page in resource array
+            // register landing page in resource map
+            $top_level = $config['run_without_parent'];
+            if (!$top_level) continue;
             $landing = $config['landing_resource_id'];
             if (empty($landing)) continue;
             $this->addLanding($landing,$schema_name);
@@ -106,7 +110,7 @@ class customUrls {
         if (!isset($this->resources[$landing])) {
             $this->resources[$landing] = array();
         }
-        $this->resources[$landing] = array($schema_name);
+        $this->resources[$landing][] = $schema_name;
         return $this->resources[$landing];
     }
     /**
@@ -128,47 +132,55 @@ class customUrls {
     }
     /**
      * Validates the schema object currently in use by the page
-     * @return bool True if valid
+     * @return string One of 'pass','fail', or 'redirect'
      */
     public function validateCurrentSchema() {
-        $possible_schemas = $this->getSchemasByLanding($this->modx->resource->get('id'));
+        $current_resource_id = ''.$this->modx->resource->get('id');
+        $possible_schemas = $this->getSchemasByLanding($current_resource_id);
+        $the_only_poss_schema = (count($possible_schemas) == 1) ? $possible_schemas[0] : '';
         if (empty($possible_schemas) || !is_array($possible_schemas)) {
             $this->setCurrentSchema(null);
-            return false;
+            return 'fail';
         }
         $schema = $this->getCurrentSchema();
-        $schema_name = ($schema && ($schema instanceof cuSchema)) ? $schema->get('key') : '';
+        $schema_name = ($schema instanceof cuSchema) ? $schema->get('key') : '';
         if (empty($schema_name) || !in_array($schema_name,$possible_schemas)) {
-            foreach($possible_schemas as $schema_name) {
-                $schema = $this->getSchema($schema_name);
-                $schema->accessedDirectly();        // may redirect to errorPage
-            }
             $this->setCurrentSchema(null);
-            return false;
+            if ($the_only_poss_schema) {
+                foreach($possible_schemas as $schema_name) {
+                    $schema = $this->getSchema($schema_name);
+                    $redirect = (bool) $schema->get('redirect_if_accessed_directly');
+                    if ($redirect) return 'redirect';
+                }
+            }
+            return 'fail';
         }
         $config = $schema->config;
         $resource = $schema->getData('resource');   // only set if redirected by onPageNotFound event
         if (empty($resource)) {
-            $schema->accessedDirectly();            // may redirect to errorPage
             $this->setCurrentSchema(null);
-            return false;
+            if ($the_only_poss_schema) {
+                $redirect = (bool) $schema->get('redirect_if_accessed_directly');
+                if ($redirect) return 'redirect';
+            }
+            return 'fail';
         }
         if ($resource != $this->modx->resource->get('id')) {
             $this->setCurrentSchema(null);    // prevents the next event from executing
-            return false;
+            return 'fail';
         }
         // check object
         $object = $schema->getData('object');
         if (!$object) {
             if ($config['redirect_if_object_not_found']) $this->modx->sendErrorPage();
             $this->setCurrentSchema(null);
-            return false;
+            return 'fail';
         }
         if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {
             $this->setCurrentSchema(null);
-            return false;
+            return 'fail';
         }
-        return true;
+        return 'pass';
     }
     /**
      * Sets the schema object currently in use by the page
@@ -187,13 +199,15 @@ class customUrls {
      * @return string|false The key of the schema or false if schema not fount
      */
     public function parseUrl($url) {
+        $output = false;
         foreach ($this->schemas as $key => $schema) {
-            if ($schema->parseUrl($url)) {
-                return $schema;
+            if ($schema instanceof cuSchema && $schema->parseUrl($url)) {
+                $output = $schema;
             }
         }
-        return false;
+        return $output;
     }
+    
     /**
      * Returns a url from the object and schema name
      * @param object $object The object to make the url from
@@ -226,6 +240,7 @@ class customUrls {
      * Checks if subject starts with search
      * @param string $search
      * @param string $subject
+     * @return bool True if subject begins with search, false if not
      */
     public function findFromStart($search,$subject){
         if (empty($search)) return true;
@@ -237,6 +252,7 @@ class customUrls {
      * Checks if subject ends with search
      * @param string $search
      * @param string $subject
+     * @return bool True if subject ends with search, false if not
      */
     public function findFromEnd($search,$subject){
         if (empty($search)) return true;
@@ -249,6 +265,7 @@ class customUrls {
      * @param string $search
      * @param string $replace
      * @param string $subject
+     * @return string The replaced string
      */
     public function replaceFromStart($search, $replace, $subject){
         $output = '';
@@ -264,6 +281,7 @@ class customUrls {
      * @param string $search
      * @param string $replace
      * @param string $subject
+     * @return string The replaced string
      */
     public function replaceFromEnd($search, $replace, $subject){
         $output = '';

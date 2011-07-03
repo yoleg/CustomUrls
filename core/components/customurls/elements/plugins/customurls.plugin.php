@@ -54,9 +54,9 @@ switch($event) {
         $alias = trim($alias, '/');
         $wall_objectname = $alias;
         $schema = $customurls->parseUrl($alias);
+        if (false) $schema = new cuSchema($customurls,array());        // for debugging only
         if (!($schema instanceof cuSchema)) {
             return '';
-            $schema = new cuSchema($customurls,array());        // for debugging
         }
         $object = $schema->getData('object');
         $object_action = $schema->getData('object_action');
@@ -74,17 +74,20 @@ switch($event) {
         break;
 
     case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
-        return '';
-        $customurls->validateCurrentSchema();       // may redirect to errorPage and/or set current schema to null
-
+        $validation = $customurls->validateCurrentSchema();       // if redirect is required, sets
+        switch($validation) {
+            case 'pass': break;
+            case 'redirect': $modx->sendErrorPage();
+            default: return '';
+        }
         $schema = $customurls->getCurrentSchema();
         if (empty($schema) || !($schema instanceof cuSchema)) return '';
         $config = $schema->config;
         $object = $schema->getData('object');
         // set placeholders
         $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
+        $placeholders = array();
         if ($config['set_placeholders']) {
-            $placeholders = array();
             $placeholders[$config['display_placeholder']] = '';
             $display_field = !empty($config['search_display_field']) ? $config['search_display_field'] : $config['search_field'];
             $placeholders[$config['display_placeholder']] = $object->get($display_field);
@@ -97,7 +100,6 @@ switch($event) {
 
     case 'OnWebPagePrerender' :     // after output is processed
         // die();
-        return '';
         $schema = $customurls->getCurrentSchema();
         if (empty($schema) || !($schema instanceof cuSchema)) return '';
         $config = $schema->config;
