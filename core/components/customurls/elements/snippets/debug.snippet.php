@@ -22,7 +22,7 @@ foreach ($array as $key => $value) {
     if (strpos($key,'+') !== 0) $output_array[$key] = $value;
 }
 $output .= '<pre>';
-$output .= $output .= '<br /><br />Placeholders: '.htmlentities(print_r($output_array,1));
+$output .= '<br /><br />Placeholders: '.htmlentities(print_r($output_array,1));
 
 // display global arrays
 if (!empty($_REQUEST)) {
