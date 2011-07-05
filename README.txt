@@ -14,14 +14,14 @@ All of the settings for the urls are stored in two system settings in JSON forma
 For example:
 return htmlentities($modx->fromJSON($php_array));
 
-Structure of system setting "customurls.schemes" (allows multiple url schemes this way):
+Structure of system setting "customurls.schemas" (allows multiple url schemas this way):
 array(
-    'scheme_name' => array(
+    'schema_name' => array(
         'setting' => 'value',
         'setting' => 'value',
         'setting' => 'value',
     ),
-    'another_scheme_name' => array(
+    'another_schema_name' => array(
         'setting' => 'value',
         'setting' => 'value',
         'setting' => 'value',
@@ -48,4 +48,4 @@ Usage:
 
 (Hopeful) Roadmap:
 * Add helper snippets to link from other pages
-* Add a JSON generator tool to the manager to generate URL schemes
+* Add a JSON generator tool to the manager to generate URL schemas
