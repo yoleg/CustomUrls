@@ -27,8 +27,13 @@
  * Action url: [[++base_url]][[+prefix]]databaseSearchField[[+suffix]][[+delimiter]]action-or-child-schema
  * ToDo: use RegExp or other method to add flexibility to URLs
 */
-$event = $modx->event->name;
+// for debugging only - never happens
+if (false) $modx = new modX('');
+if (false) $customurls = new customUrls($modx,array());
+if (false) $schema = new cuSchema($customurls,array());
 
+// check event in allowed events
+$event = $modx->event->name;
 $events = array('OnPageNotFound','OnLoadWebDocument','OnWebPagePrerender');
 if (!in_array($event,$events)) return '';
 
@@ -39,8 +44,11 @@ if (!$friendly_urls)    return '';
 // load the custom urls service
 $customurls = $modx->getService('customurls','customUrls',$modx->getOption('customurls.core_path',null,$modx->getOption('core_path').'components/customurls/').'model/customurls/',$scriptProperties);
 if (!($customurls instanceof customUrls)) {
-    $customurls = new customUrls($modx,array());
+    $modx->log(modX::LOG_LEVEL_ERROR,'[customurls plugin] Could not load customurls service.');
+    return '';
 }
+
+if (!$customurls->canUse()) return '';
 
 // get the event name
 switch($event) {
@@ -50,7 +58,6 @@ switch($event) {
         $alias = $customurls->replaceFromStart($base_url,'',$alias);    // removes base_url - but only if found in beginning of URL
         $alias = strtok($alias, "?");                                   // grabs everything before the first '?'
         $schema = $customurls->parseUrl($alias);
-        if (false) $schema = new cuSchema($customurls,array());         // for debugging only - never happens
         if (!($schema instanceof cuSchema)) return '';
         $schema->setRequest();                                          // Adds data to the $_REQUEST parameter
         $landing = (int) $schema->getLanding();                         // prefers child landings over parent landings
@@ -59,13 +66,22 @@ switch($event) {
         break;
 
     case 'OnLoadWebDocument' :      // after resource object loaded but before it is processed
-        $validation = $customurls->validateCurrentSchema();             // if redirect is required, returns 'redirect'. Sets current schema to null if failed validation
-        switch($validation) {
-            case 'pass': break;
-            case 'fail': return '';
-            case 'redirect': $modx->sendErrorPage();
-            default: return '';
+        // Validate if a schema has been detected by the 404 event.
+        // If redirect is required, returns 'redirect'. Sets current schema to null if failed validation
+        $validation = $customurls->validateCurrentSchema();
+        if ($validation === 'fail' || $validation === 'redirect') {
+            // Try to auto-detect URL from REQUEST params and redirect to the friendly URL
+            $url = $customurls->detectUrlFromRequest();
+            if (!empty($url)) {
+                $modx->sendRedirect($url);
+            }
+            // Redirect to error page if required
+            if ($validation === 'redirect') {
+                $customurls->disable();  // disable execution for any subsequent events
+                $modx->sendErrorPage();
+            }
         }
+        if ($validation !== 'pass') return '';
         $schema = $customurls->getCurrentSchema();                      // gets the schema set by the OnPageNotFound event
         if (empty($schema) || !($schema instanceof cuSchema)) return '';
         // set placeholders
@@ -89,6 +105,7 @@ switch($event) {
         $output = $schema->customSearchReplace($output);
         $modx->resource->_output = $output;
         break;
+    
     default:
         break;
 }

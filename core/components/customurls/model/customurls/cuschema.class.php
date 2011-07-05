@@ -151,6 +151,7 @@ class cuSchema {
         $remainder = $this->cu->replaceFromStart($prefix.$url_parts[0],'',$original_url);
         $this->setData('remainder',$remainder);
         $children = $this->children;
+        $success = false;
         if (!empty($children) && !empty($remainder)) {
             foreach ($children as $key => $child) {
                 $success = $child->parseUrl($remainder);
@@ -195,11 +196,20 @@ class cuSchema {
         $object = $this->getData('object');
         $object_action = $this->getData('object_action');
         $object_id = $this->getData('object_id');
+        $request = array();
         if ($object_id && $object) {
-            $_REQUEST[$prefix.$this->getRequestKey('id')] = $object_id;
+            $request[$prefix.$this->getRequestKey('id')] = $object_id;
         }
         if (strval($object_action)) {
-            $_REQUEST[$prefix.$this->getRequestKey('action')] = $object_action;
+            $request[$prefix.$this->getRequestKey('action')] = $object_action;
+        }
+        foreach ($request as $key => $value) {
+            if ($this->get('set_get')) {
+                $_GET[$key] = $value;
+            }
+            if ($this->get('set_request')) {
+                $_REQUEST[$key] = $value;
+            }
         }
         $child = $this->getData('child');
         if (!empty($child)) {

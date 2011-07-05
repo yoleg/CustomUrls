@@ -26,9 +26,11 @@ class customUrls {
      */
     protected $defaults = array(
         'landing_resource_id' => 0,             // the resource id to redirect to
+        'set_request' => true,                  // If true, sets $_REQUEST parameters
         'request_prefix' => 'user_',            // $_REQUEST parameter prefix
         'request_name_id' => 'id',              // $_REQUEST parameter for the value of the search_result_field
         'request_name_action' => 'action',      // $_REQUEST parameter for action (if found in the action map)
+        'set_get' => true,                      // If true, sets $_GET parameters (using same settings as $_REQUEST)
         'base_url' => '',                       // NOT the system base_url, just a prefix to add to all generated URLs
         'lowercase_url' => true,                // Generates lowercase urls. Does not affect searches.
         'url_prefix' => '',                     // A prefix to append to the start of all urls
@@ -52,6 +54,7 @@ class customUrls {
         'custom_search_replace' => array(),     // an array of search => replace pairs to str_replace the output with
         'run_without_parent' => true,           // if set to false, will not be run unless called by another schema in the child_schemas array
         'child_schemas' => array(),             // an array of schema_names OR schema_name => (array) overrides to run the URL remainder through
+        'url_from_params' => true,              // if the page is accessed directly but with the proper GET parameters, the plugin will try to detect the schema from the GET or REQUEST params and forward to the friendly Url. Useful for Quip and similar components that redirect directly to the current page afterwards.
     );
 
     /**
@@ -69,6 +72,10 @@ class customUrls {
      * @var cuSchema The instance of the schema being currently used on the document
      */
     public $current_schema = null;
+    /**
+     * @var bool If set to true, will disable the plugin execution. Useful for preventing multiple firings (if sending to an error page for instance).
+     */
+    public $disable = false;
 
     /**
      * The customUrls Constructor.
@@ -125,6 +132,31 @@ class customUrls {
         }
     }
     /**
+     * Disables the plugin
+     * @return bool
+     */
+    public function disable() {
+        $this->disable = true;
+        return true;
+    }
+    /**
+     * Enables the plugin
+     * @return bool
+     */
+    public function enable() {
+        $this->disable = false;
+        return true;
+    }
+    /**
+     * Checks if user has permissions to use the plugin
+     * Only (enabled/ disabled) checking is currently implemented.
+     * @return bool
+     */
+    public function canUse() {
+        if ($this->disable) return false;
+        return true;
+    }
+    /**
      * Registers a landing-page, schema name pair
      * @param int $landing The landing resource
      * @param string $schema_name The name of the schema
@@ -155,12 +187,53 @@ class customUrls {
         return $this->current_schema;
     }
     /**
+     * Attempts to generate a CustomUrl from the REQUEST parameters set on the page
+     * ToDo: add support for child classes
+     * @return string The generated url
+     */
+    public function detectUrlFromRequest() {
+        $current_resource_id = ''.$this->modx->resource->get('id');
+        $possible_schemas = $this->getSchemasByLanding($current_resource_id);
+        $possible_schemas = array_unique($possible_schemas);
+        foreach ($possible_schemas as $key => $schema_name) {
+            $schema = $this->getSchema($schema_name);
+            if (false) $schema = new cuSchema($this);       // debug only - never used
+            if (!$schema instanceof cuSchema) continue;
+            if (!$schema->get('url_from_params')) continue;
+            $param = $schema->getRequestKey('id');
+            if (empty($param)) continue;
+            if (!isset($_REQUEST[$param])) continue;
+            $object = $schema->getObject('search_result_field', $_REQUEST[$param]);
+            $class =  $schema->get('search_class');
+            if ($object instanceof $class) {
+                $action_param = $schema->getRequestKey('action');
+                $action = isset($_REQUEST[$action_param]) ? $_REQUEST[$action_param] : '';
+                $url = $schema->makeUrl($object,$action);
+                if (!empty($url)) {
+                    $delimiter = "?";
+                    if (isset($_GET[$param])) unset($_GET[$param]);
+                    $q = $this->modx->getOption('request_param_alias');
+                    $id = $this->modx->getOption('request_param_id');
+                    if (isset($_GET['q'])) unset($_GET[$q]);
+                    if (isset($_GET['id'])) unset($_GET[$id]);
+                    foreach($_GET as $key => $value) {
+                        $url .= $delimiter.$key."=".$value;
+                        $delimiter = "&";
+                    }
+                    return $url;
+                }
+            }
+        }
+        return '';
+    }
+    /**
      * Validates the schema object currently in use by the page
      * @return string One of 'pass','fail', or 'redirect'
      */
     public function validateCurrentSchema() {
         $current_resource_id = ''.$this->modx->resource->get('id');
         $possible_schemas = $this->getSchemasByLanding($current_resource_id);
+        $possible_schemas = array_unique($possible_schemas);
         $the_only_poss_schema = (count($possible_schemas) == 1) ? $possible_schemas[0] : '';
         if (empty($possible_schemas) || !is_array($possible_schemas)) {
             $this->setCurrentSchema(null);
