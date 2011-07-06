@@ -55,6 +55,7 @@ class customUrls {
         'run_without_parent' => true,           // if set to false, will not be run unless called by another schema in the child_schemas array
         'child_schemas' => array(),             // an array of schema_names OR schema_name => (array) overrides to run the URL remainder through
         'url_from_params' => true,              // if the page is accessed directly but with the proper GET parameters, the plugin will try to detect the schema from the GET or REQUEST params and forward to the friendly Url. Useful for Quip and similar components that redirect directly to the current page afterwards.
+        'strict' => false,                      // "strict mode" if set to true, if any part of the URL is left over and not parsed, will treat the match as failed
     );
 
     /**
@@ -119,7 +120,7 @@ class customUrls {
                     $child_config = array_merge($defaults,$url_schemas[$child],$child_config);
                     $child_landing = $child_config['landing_resource_id'];
                     if (empty($child_landing)) continue;
-                    $this->addLanding($landing,$schema_name);   // parent is registered as the owner of the landing page
+                    $this->addLanding($child_landing,$schema_name);   // parent is registered as the owner of the landing page
                     $child_config['key'] = $child;
                     // create the child objects
                     $processed_children[$child] = new cuSchema($this,$child_config);
@@ -162,8 +163,8 @@ class customUrls {
      * @param string $schema_name The name of the schema
      * @return array The current array of landing pages
      */
-    protected function addLanding($landing,$schema_name) {
-        if (!isset($this->resources[$landing])) {
+    public function addLanding($landing,$schema_name) {
+        if (!isset($this->resources[$landing]) || !is_array($this->resources[$landing])) {
             $this->resources[$landing] = array();
         }
         $this->resources[$landing][] = $schema_name;
@@ -189,6 +190,7 @@ class customUrls {
     /**
      * Attempts to generate a CustomUrl from the REQUEST parameters set on the page
      * ToDo: add support for child classes
+     * ToDo: add support for actions
      * @return string The generated url
      */
     public function detectUrlFromRequest() {
@@ -200,28 +202,9 @@ class customUrls {
             if (false) $schema = new cuSchema($this);       // debug only - never used
             if (!$schema instanceof cuSchema) continue;
             if (!$schema->get('url_from_params')) continue;
-            $param = $schema->getRequestKey('id');
-            if (empty($param)) continue;
-            if (!isset($_REQUEST[$param])) continue;
-            $object = $schema->getObject('search_result_field', $_REQUEST[$param]);
-            $class =  $schema->get('search_class');
-            if ($object instanceof $class) {
-                $action_param = $schema->getRequestKey('action');
-                $action = isset($_REQUEST[$action_param]) ? $_REQUEST[$action_param] : '';
-                $url = $schema->makeUrl($object,$action);
-                if (!empty($url)) {
-                    $delimiter = "?";
-                    if (isset($_GET[$param])) unset($_GET[$param]);
-                    $q = $this->modx->getOption('request_param_alias');
-                    $id = $this->modx->getOption('request_param_id');
-                    if (isset($_GET['q'])) unset($_GET[$q]);
-                    if (isset($_GET['id'])) unset($_GET[$id]);
-                    foreach($_GET as $key => $value) {
-                        $url .= $delimiter.$key."=".$value;
-                        $delimiter = "&";
-                    }
-                    return $url;
-                }
+            $url = $schema->makeUrlFromParams();
+            if (!empty($url)) {
+                return $url;
             }
         }
         return '';
@@ -240,8 +223,13 @@ class customUrls {
             return 'fail';
         }
         $schema = $this->getCurrentSchema();
-        $schema_name = ($schema instanceof cuSchema) ? $schema->get('key') : '';
-        if (empty($schema_name) || !in_array($schema_name,$possible_schemas)) {
+        $schema_name = '';
+        if ($schema instanceof cuSchema) {
+            $schema_name = $schema->get('key');
+            $schema = $schema->getLastChild();
+        }
+        if (empty($schema_name) || !in_array($schema_name,$possible_schemas) || !($schema instanceof cuSchema)) {
+            // Check if child schema matches instead
             $this->setCurrentSchema(null);
             if ($the_only_poss_schema) {
                 foreach($possible_schemas as $schema_name) {
@@ -309,16 +297,22 @@ class customUrls {
      * Returns a url from the object and schema name
      * Basically passes all other parameters to the makeUrl method of the schema object specified by $schema_name
      * @see cuSchema::makeUrl
-     * @param string|array $object An instance of the object, or an array of objects (first will be used as main, all others as children)
      * @param string $schema_name The schema name
-     * @param string $action The optional action for the url
-     * @param array $children An array of child objects (ordered by depth)
+     * @param object|array $objects An instance of the object, or an array of objects (first will be used as main, all others as children)
+     * @param string|array $actions The optional action for the url or array of actions (with the same order as the array of objects
+     * @param array $children An array of child schemas (ordered by depth)
      * @return string The url
      */
-    public function makeUrl($object=null,$schema_name,$action = '',$children=array()) {
+    public function makeUrl($schema_name,$objects=null,$actions = '',$children=array()) {
+        // for backwards compatibility:
+        if ((is_object($schema_name) || is_null($schema_name)) && is_string($objects)) {
+            $name = $objects;
+            $objects = $schema_name;
+            $schema_name = $name;
+        }
         $schema = $this->getSchema($schema_name);
         if (!($schema instanceof cuSchema)) return '';
-        $output = $schema->makeUrl($object,$action,$children);
+        $output = $schema->makeUrl($objects,$actions,$children);
         return $output;
     }
     /**
