@@ -21,10 +21,10 @@ class customUrls {
      */
     public $config = array();
     /**
-     * @access protected
+     * @access public
      * @var array The array of default url schema options
      */
-    protected $defaults = array(
+    public $defaults = array(
         'landing_resource_id' => 0,             // the resource id to redirect to
         'set_request' => true,                  // If true, sets $_REQUEST parameters
         'request_prefix' => 'user_',            // $_REQUEST parameter prefix
@@ -56,8 +56,14 @@ class customUrls {
         'child_schemas' => array(),             // an array of schema_names OR schema_name => (array) overrides to run the URL remainder through
         'url_from_params' => true,              // if the page is accessed directly but with the proper GET parameters, the plugin will try to detect the schema from the GET or REQUEST params and forward to the friendly Url. Useful for Quip and similar components that redirect directly to the current page afterwards.
         'strict' => false,                      // "strict mode" if set to true, if any part of the URL is left over and not parsed, will treat the match as failed
+        'children_inherit_landing' => false,    // if true, children schemas will use the landing page of the parent
     );
 
+    /**
+     * @access public
+     * @var array The array of unprocessed url schemas, freshly loaded from the settings
+     */
+    public $unprocessed = array();
     /**
      * @access public
      * @var array The array of url schemas, already merged with defaults
@@ -94,7 +100,9 @@ class customUrls {
         $defaults = $this->defaults;
         $custom_defaults = $this->modx->fromJSON($this->modx->getOption('customurls.defaults',null,'[]'));
         $defaults = array_merge($defaults,$custom_defaults);
+        $this->defaults = $defaults;    // override stored defaults with new defaults
         $url_schemas = $this->modx->fromJSON($this->modx->getOption('customurls.schemas',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
+        $this->unprocessed = $url_schemas;
         // clean and register url schemas
         foreach ($url_schemas as $schema_name => $config) {
             // merge config with defaults
@@ -107,28 +115,9 @@ class customUrls {
             // skip child-only schemas
             $top_level = $config['run_without_parent'];
             if (!$top_level) continue;
-            // calculate children
-            $children = $config['child_schemas'];
-            $processed_children = array();
-            if (!empty($children)) {
-                foreach ($children as $child => $child_config) {
-                    if (is_numeric($child)) {
-                        $child = $child_config;                          // allow simple array of schema names
-                        $child_config = array();
-                    }
-                    if (!isset($url_schemas[$child])) continue;
-                    $child_config = array_merge($defaults,$url_schemas[$child],$child_config);
-                    $child_landing = $child_config['landing_resource_id'];
-                    if (empty($child_landing)) continue;
-                    $this->addLanding($child_landing,$schema_name);   // parent is registered as the owner of the landing page
-                    $child_config['key'] = $child;
-                    // create the child objects
-                    $processed_children[$child] = new cuSchema($this,$child_config);
-                }
-            }
             // save the object
+            // constructor also loads children into $schema->children and registers child pages
             $schema = new cuSchema($this,$config);
-            if (!empty($processed_children)) $schema->children = $processed_children;
             $this->schemas[$schema_name] = $schema;
         }
     }
@@ -203,11 +192,10 @@ class customUrls {
             if (!$schema instanceof cuSchema) continue;
             if (!$schema->get('url_from_params')) continue;
             $url = $schema->makeUrlFromParams();
-            if (!empty($url)) {
-                return $url;
-            }
+            if (!empty($url)) {break;}
         }
-        return '';
+        if (empty($url)) return '';
+        return $url;
     }
     /**
      * Validates the schema object currently in use by the page
@@ -240,7 +228,6 @@ class customUrls {
             }
             return 'fail';
         }
-        $config = $schema->config;
         $resource = $schema->getData('resource');   // only set if redirected by onPageNotFound event
         if (empty($resource)) {
             $this->setCurrentSchema(null);
@@ -257,11 +244,14 @@ class customUrls {
         // check object
         $object = $schema->getData('object');
         if (!$object) {
-            if ($config['redirect_if_object_not_found']) $this->modx->sendErrorPage();
+            if ($schema->get('redirect_if_object_not_found')) {
+                return 'redirect';
+            }
             $this->setCurrentSchema(null);
             return 'fail';
         }
-        if (!empty($config['search_class_test_method']) && !$object->$config['search_class_test_method']()) {
+        $method = $schema->get('search_class_test_method');
+        if (!empty($method) && !$object->$method()) {
             $this->setCurrentSchema(null);
             return 'fail';
         }

@@ -61,6 +61,29 @@ class cuSchema {
         }
         $this->config =& $config;
         $this->key = $this->config['key'];
+        // calculate children
+        $children = $this->config['child_schemas'];
+        $processed_children = array();
+        if (!empty($children)) {
+            foreach ($children as $child => $child_config) {
+                if (is_numeric($child)) {
+                    $child = $child_config;                          // allow simple array of schema names
+                    $child_config = array();
+                }
+                if (!isset($customurls->unprocessed[$child])) continue;
+                $child_config = array_merge($customurls->defaults,$customurls->unprocessed[$child],$child_config);
+                if ($this->get('children_inherit_landing')) {
+                    $child_config['landing_resource_id'] = $this->get('landing_resource_id');
+                }
+                $child_landing = $child_config['landing_resource_id'];
+                if (empty($child_landing)) continue;
+                $customurls->addLanding($child_landing,$this->key);   // parent is registered as the owner of the landing page
+                $child_config['key'] = $child;
+                // create the child objects
+                $processed_children[$child] = new cuSchema($customurls,$child_config);
+            }
+        }
+        if (!empty($processed_children)) $this->children = $processed_children;
     }
     
     /**
@@ -158,7 +181,6 @@ class cuSchema {
         $parsed_url = $prefix.$url_parts[0];
         $this->setData('parsed_url',$parsed_url);
         $remainder = $this->cu->replaceFromStart($parsed_url,'',$original_url);
-
         $this->setData('remainder',$remainder);
         $children = $this->children;
         $haschild = false;
@@ -396,8 +418,8 @@ class cuSchema {
         $child = null;
         if (!empty($objects) && is_array($objects)) {
             $child = empty($children)  ? $this->getData('child') : array_shift($children);
-            if (!($child instanceof cuSchema)) {
-                // auto-detect child schema
+            // auto-detect child schema from object if empty
+            if (empty($child) || !($child instanceof cuSchema)) {
                 $child_objects = $objects;
                 $child_object = array_shift($child_objects);
                 $poss_child_schemas = $this->children;
@@ -448,6 +470,8 @@ class cuSchema {
      * @return array Array of arrays or empty array if no match. Array structure: array(array('schema','object','action'),array('first_child_schema','object','action'),...)
      */
     public function detectFromParams() {
+        $info = $this->getData('params_info');
+        if (!empty($info)) return $info;
         $info = array();
         $param = $this->getRequestKey('id');
         if (empty($param)) return array();
@@ -468,40 +492,62 @@ class cuSchema {
                 break;
             }
         }
+        $this->setData('params_info',$info);
         return $info;
     }
     /**
      * Attempts to generate a URL from the request parameters detected on the page
+     * @param array $get The array of GET values to append to the URL (uses $_GET by default)
      * @return string The url or empty if not found
      */
-    public function makeUrlFromParams() {
-        $url = '';
+    public function makeUrlFromParams(array $get = array()) {
         $info_array = $this->detectFromParams();
         if (empty($info_array) || !is_array($info_array)) return '';
         $objects = array();
         $actions = array();
-        $unset_params = array();
-        $unset_params[] = $this->modx->getOption('request_param_alias');
-        $unset_params[] = $this->modx->getOption('request_param_id');
         foreach ($info_array as $key => $info) {
             $objects[] = $info['object'];
             $actions[] = $info['action'];
+        }
+        $url = $this->makeUrl($objects,$actions);
+        if (empty($url)) return '';
+        // prep the array of reserved parameters that should not be added to the URL
+        $unset_params = array();
+        if (empty($get)) {
+            // Get the current GET parameters to append to the URL
+            $get = $_GET;
+            // Remove MODx reserved parameters
+            $unset_params[] = $this->modx->getOption('request_param_alias');
+            $unset_params[] = $this->modx->getOption('request_param_id');
+        }
+        // Remove params used byt he schema and children
+        $schema_params = $this->getUsedParamsFromParams();
+        $unset_params = array_merge($schema_params,$unset_params);
+        foreach ($unset_params as $param) {
+            if (isset($get[$param])) unset($get[$param]);
+        }
+        $delimiter = '?';
+        foreach ($get as $key) {
+            $url = $url.$delimiter.$key;
+            $delimiter = '&';
+        }
+        return $url;
+    }
+    
+    /**
+     * Tries to auto-detect the GET parameters that are being used from the request parameters detected on the page
+     * @return array An array of GET parameter keys
+     */
+    public function getUsedParamsFromParams() {
+        $info_array = $this->detectFromParams();
+        $unset_params = array();
+        foreach ($info_array as $key => $info) {
             $schema = $info['schema'];
             $unset_params[] = $schema->getRequestKey('id');
             $unset_params[] = $schema->getRequestKey('action');
         }
-        $url = $this->makeUrl($objects,$actions);
-        if (empty($url)) return '';
-        $params = $_GET;
-        $delimiter = "?";
-        foreach ($unset_params as $key) {
-            if (isset($params[$key])) unset($params[$key]);
-        }
-        foreach($params as $key => $value) {
-            $url .= $delimiter.$key."=".$value;
-            $delimiter = "&";
-        }
-        return $url;
+        $unset_params = array_unique($unset_params);
+        return $unset_params;
     }
 
     /**
