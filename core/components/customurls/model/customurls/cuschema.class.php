@@ -83,6 +83,15 @@ class cuSchema {
                 $processed_children[$child] = new cuSchema($customurls,$child_config);
             }
         }
+        if (!empty($this->config['action_map']) && is_array($this->config['action_map'])) {
+            foreach ($this->config['action_map'] as $action_name => $resource_id) {
+                /* if match is found, set redirect to proper resource */
+                if (!empty($action_name) && !empty($resource_id)) {
+                    $resource_id = (int) $resource_id;
+                    $this->cu->addLanding($resource_id,$this->get('key'));
+                }
+            }
+        }
         if (!empty($processed_children)) $this->children = $processed_children;
     }
     
@@ -195,16 +204,16 @@ class cuSchema {
         }
         $action_map = $this->config['action_map'];
         $object_action = '';
+        $remainder = $this->cu->replaceFromStart($this->config['url_delimiter'],'',$remainder);
         if (!$haschild && !empty($remainder) && !empty($action_map)) {
             // action is the part after the delimiter
-            $url_action = trim($remainder,' '.$this->get('delimiter'));
+            $url_action = trim($remainder,$trimchars);
             $landing_resource_id = false;
             // Parse the wall_action_ids
             foreach ($action_map as $action_name => $resource_id) {
                 /* if match is found, set redirect to proper resource */
                 if (!empty($action_name) && !empty($resource_id) && !empty($url_action) && $url_action == $action_name) {
                     $landing_resource_id = (int) $resource_id;
-                    $this->cu->addLanding($landing_resource_id,$this->get('key'));
                     $object_action = $action_name;
                     break;
                 }
@@ -235,7 +244,7 @@ class cuSchema {
      */
     public function setRequest($prefix = '') {
         $object = $this->getData('object');
-        $object_action = $this->getData('object_action');
+        $object_action = $this->getData('action');
         $object_id = $this->getData('object_id');
         $request = array();
         if ($object_id && $object) {
@@ -403,6 +412,9 @@ class cuSchema {
                 $objects[] = $child_object;
             }
         }
+        if (empty($actions)) {
+            $actions = $this->getData('action','');
+        }
         $object = (is_array($objects)) ? array_shift($objects) : $objects;
         if (!($object instanceof $this->config['search_class'])) return '';
         // set the action
@@ -438,6 +450,7 @@ class cuSchema {
             $next_url .= $delimiter.$this->config['url_delimiter'].$action;
         }
         $url = $url.$next_url;
+        $url = str_replace($delimiter.$delimiter,$delimiter,$url);
         return $url;
     }
     /**
@@ -527,8 +540,8 @@ class cuSchema {
             if (isset($get[$param])) unset($get[$param]);
         }
         $delimiter = '?';
-        foreach ($get as $key) {
-            $url = $url.$delimiter.$key;
+        foreach ($get as $key => $value) {
+            $url = $url.$delimiter.$key.'='.$value;
             $delimiter = '&';
         }
         return $url;

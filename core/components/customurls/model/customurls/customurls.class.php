@@ -217,7 +217,6 @@ class customUrls {
             $schema = $schema->getLastChild();
         }
         if (empty($schema_name) || !in_array($schema_name,$possible_schemas) || !($schema instanceof cuSchema)) {
-            // Check if child schema matches instead
             $this->setCurrentSchema(null);
             if ($the_only_poss_schema) {
                 foreach($possible_schemas as $schema_name) {
