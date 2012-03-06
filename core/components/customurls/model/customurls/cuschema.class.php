@@ -364,7 +364,7 @@ class cuSchema {
         $class = $service_config['class'];
         $package = $service_config['package'];
         $config = $service_config['config'];
-        $path = $service_config['path'];
+        $path = isset($service_config['path']) ? $service_config['path'] : null;
         $path = !empty($path) ? $path : $this->modx->getOption($package.'.core_path',null,$this->modx->getOption('core_path').'components/'.$package.'/').'model/'.$package.'/';
         $service = $this->modx->getService($name,$class,$path,$config);
         if (!($service instanceof $class)) {
@@ -412,7 +412,7 @@ class cuSchema {
                 $objects[] = $child_object;
             }
         }
-        if (empty($actions)) {
+        if (empty($actions) && ($actions !== null)) {
             $actions = $this->getData('action','');
         }
         $object = (is_array($objects)) ? array_shift($objects) : $objects;
