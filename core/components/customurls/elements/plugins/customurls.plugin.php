@@ -35,6 +35,8 @@
  * @var array $scriptProperties
  */
 
+if ($modx->context->get('key') == 'mgr') {return;}
+
 // check event in allowed events
 $event = $modx->event->name;
 $events = array('OnPageNotFound','OnLoadWebDocument','OnWebPagePrerender');
