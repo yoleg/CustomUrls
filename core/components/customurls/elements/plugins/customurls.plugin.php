@@ -28,9 +28,12 @@
  * ToDo: use RegExp or other method to add flexibility to URLs
 */
 // for debugging only - never happens
-if (false) $modx = new modX('');
-if (false) $customurls = new customUrls($modx,array());
-if (false) $schema = new cuSchema($customurls,array());
+/**
+ * @var MODx $modx
+ * @var customUrls $customurls
+ * @var cuSchema $schema
+ * @var array $scriptProperties
+ */
 
 // check event in allowed events
 $event = $modx->event->name;
