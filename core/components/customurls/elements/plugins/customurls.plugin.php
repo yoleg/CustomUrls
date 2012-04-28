@@ -58,7 +58,7 @@ switch($event) {
         $alias = $customurls->replaceFromStart($base_url,'',$alias);    // removes base_url - but only if found in beginning of URL
         $alias = strtok($alias, "?");                                   // grabs everything before the first '?'
         $schema = $customurls->parseUrl($alias);
-        if (!($schema instanceof cuSchema)) return '';
+        if (!($schema instanceof cuSchema)) break;
         $schema->setRequest();                                          // Adds data to the $_REQUEST parameter
         $landing = (int) $schema->getLanding();                         // prefers child landings over parent landings
         $customurls->setCurrentSchema($schema);                         // saves for use by later events
@@ -81,21 +81,21 @@ switch($event) {
                 $modx->sendErrorPage();
             }
         }
-        if ($validation !== 'pass') return '';
+        if ($validation !== 'pass') break;
         $schema = $customurls->getCurrentSchema();                      // gets the schema set by the OnPageNotFound event
-        if (empty($schema) || !($schema instanceof cuSchema)) return '';
+        if (empty($schema) || !($schema instanceof cuSchema)) break;
         // set placeholders
         $set_ph = $schema->get('set_placeholders');
         if ($set_ph) {
             $placeholders = $schema->toArray();
             $modx->setPlaceholders($placeholders);
         }
-        return '';
+        break;
 
     case 'OnWebPagePrerender' :     // after output is processed
         // die();
         $schema = $customurls->getCurrentSchema();                      // gets the schema set by the OnPageNotFound event
-        if (empty($schema) || !($schema instanceof cuSchema)) return '';
+        if (empty($schema) || !($schema instanceof cuSchema)) break;
         // get the old (resource) and new (object) url
         $resource_url = $modx->makeUrl($modx->resource->get('id'),'','');
         $new_url = $schema->makeUrl();
