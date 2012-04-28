@@ -56,9 +56,6 @@ class cuSchema {
     function __construct(customUrls &$customurls,array $config = array()) {
         $this->cu =& $customurls;
         $this->modx =& $customurls->modx;
-        if (false) {
-            $this->modx = new modX();           // for debugging
-        }
         $this->config =& $config;
         $this->key = $this->config['key'];
         // calculate children
@@ -291,7 +288,7 @@ class cuSchema {
         $ph_prefix = !empty($config['placeholder_prefix']) ? $config['placeholder_prefix'].'.' : '';
         $prefix = $ph_prefix.$prefix;
         // object to array
-        if (false) $object = new xPDOSimpleObject($this->modx);     // debug only
+        /** @var $object xPDOSimpleObject */
         $object = $this->getData('object');
         $array = $object->toArray($prefix.$this->get('key').'.');
         // Set the display placeholder

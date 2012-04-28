@@ -187,8 +187,8 @@ class customUrls {
         $possible_schemas = $this->getSchemasByLanding($current_resource_id);
         $possible_schemas = array_unique($possible_schemas);
         foreach ($possible_schemas as $key => $schema_name) {
+            /** @var $schema cuSchema */
             $schema = $this->getSchema($schema_name);
-            if (false) $schema = new cuSchema($this);       // debug only - never used
             if (!$schema instanceof cuSchema) continue;
             if (!$schema->get('url_from_params')) continue;
             $url = $schema->makeUrlFromParams();
