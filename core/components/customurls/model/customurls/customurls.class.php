@@ -9,22 +9,8 @@
  *
  */
 include_once dirname(__FILE__).'/cuschema.class.php';
-class customUrls {
-    /**
-     * @access public
-     * @var modX A reference to the modX object.
-     */
-    public $modx = null;
-    /**
-     * @access public
-     * @var array A config array.
-     */
-    public $config = array();
-    /**
-     * @access public
-     * @var array The array of default url schema options
-     */
-    public $defaults = array(
+define('CUSTOMURLS_DEFAULTS_PREFIX','customurls.default.');
+define('CUSTOMURLS_DEFAULTS',array(
         'landing_resource_id' => 0,             // the resource id to redirect to
         'set_request' => true,                  // If true, sets $_REQUEST parameters
         'request_prefix' => 'user_',            // $_REQUEST parameter prefix
@@ -57,8 +43,24 @@ class customUrls {
         'url_from_params' => true,              // if the page is accessed directly but with the proper GET parameters, the plugin will try to detect the schema from the GET or REQUEST params and forward to the friendly Url. Useful for Quip and similar components that redirect directly to the current page afterwards.
         'strict' => false,                      // "strict mode" if set to true, if any part of the URL is left over and not parsed, will treat the match as failed
         'children_inherit_landing' => false,    // if true, children schemas will use the landing page of the parent
-    );
-
+    )
+);
+class customUrls {
+    /**
+     * @access public
+     * @var modX A reference to the modX object.
+     */
+    public $modx = null;
+    /**
+     * @access public
+     * @var array A config array.
+     */
+    public $config = array();
+    /**
+     * @access public
+     * @var array The array of default url schema options
+     */
+    public $defaults = CUSTOMURLS_DEFAULTS;
     /**
      * @access public
      * @var array The array of unprocessed url schemas, freshly loaded from the settings
@@ -98,7 +100,14 @@ class customUrls {
         $this->modx =& $modx;
         $this->config = $config;
         $defaults = $this->defaults;
-        $custom_defaults = $this->modx->fromJSON($this->modx->getOption('customurls.defaults',null,'[]'));
+        // todo: remove
+        $custom_defaults = $this->modx->fromJSON(
+            $this->modx->getOption('customurls.defaults',null,'[]')
+        );
+        $settings_prefix = CUSTOMURLS_DEFAULTS_PREFIX;
+        foreach($this->defaults as $key => $default) {
+            $custom_defaults[$key] = $this->modx->getOption($settings_prefix.$key, null, $default);
+        }
         $defaults = array_merge($defaults,$custom_defaults);
         $this->defaults = $defaults;    // override stored defaults with new defaults
         $url_schemas = $this->modx->fromJSON($this->modx->getOption('customurls.schemas',null,'{"users":{"request_prefix":"uu_","request_name_id":"userid"}}'));
