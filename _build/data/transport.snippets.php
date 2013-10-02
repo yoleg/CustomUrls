@@ -33,14 +33,33 @@
 $snippets= array();
 $snippets['UserUrls'] = array(
     'description' => '',
+    'properties' => array(
+/*        array(
+                'name' => $k,
+                'desc' => "ffp_field_{$k}_desc",
+                'type' => is_string($v) ? 'textfield' : 'combo-boolean',
+                'options' => '',
+                'value' => $v,
+                'lexicon' => 'customurls:properties',
+        )*/
+    )
 );
 $snippets['uuAction'] = array(
     'description' => '',
+    'properties' => array(
+
+    )
 );
 $snippets['uuID'] = array(
     'description' => '',
+    'properties' => array(
+
+    )
 );
 $snippets['uuUrl'] = array(
     'description' => '',
+    'properties' => array(
+
+    )
 );
 return $snippets;

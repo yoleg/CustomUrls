@@ -1,5 +1,4 @@
 ﻿<?php
-
 $_lang['customurls'] = 'User Urls';
 $_lang['customurls_desc'] = 'a flexible friendly-url component for giving users pages reachable by username/ or username/sub-action.';
 
@@ -21,3 +20,36 @@ $_lang['setting_uu.search_class'] = 'Search Class';
 $_lang['setting_uu.search_class_desc'] = 'The PHP class to search through. Default: modUser. Do not change without lots of testing.';
 $_lang['setting_uu.enabled'] = 'Enabled';
 $_lang['setting_uu.enabled_desc'] = 'Turns on and off the CustomUrls main snippet and plugin.';
+
+$_lang['setting_customurls.landing_resource_id_desc'] = 'the resource id to redirect to. (defaults to 0)';
+$_lang['setting_customurls.set_request_desc'] = 'If true, sets $_REQUEST parameters. (defaults to true)';
+$_lang['setting_customurls.request_prefix_desc'] = '$_REQUEST parameter prefix. (defaults to \'user_\')';
+$_lang['setting_customurls.request_name_id_desc'] = '$_REQUEST parameter for the value of the search_result_field. (defaults to \'id\')';
+$_lang['setting_customurls.request_name_action_desc'] = '$_REQUEST parameter for action (if found in the action map). (defaults to \'action\')';
+$_lang['setting_customurls.set_get_desc'] = 'If true, sets $_GET parameters (using same settings as $_REQUEST). (defaults to true)';
+$_lang['setting_customurls.base_url_desc'] = 'NOT the system base_url, just a prefix to add to all generated URLs. (defaults to \'\')';
+$_lang['setting_customurls.lowercase_url_desc'] = 'Generates lowercase urls. Does not affect searches.. (defaults to true)';
+$_lang['setting_customurls.url_prefix_desc'] = 'A prefix to append to the start of all urls. (defaults to \'\')';
+$_lang['setting_customurls.url_prefix_required_desc'] = 'Resolve the URL without the prefix?. (defaults to true)';
+$_lang['setting_customurls.url_suffix_desc'] = 'A suffix to append to the end of all urls. (defaults to \'\')';
+$_lang['setting_customurls.url_suffix_required_desc'] = 'Resolve the URL without the suffix?. (defaults to true)';
+$_lang['setting_customurls.url_delimiter_desc'] = 'The separator between the main URL and the action. (defaults to '/')';
+$_lang['setting_customurls.load_modx_service_desc'] = 'loads as service if not empty. Must have the following keys set: \'name\', \'class\', \'package\' OR \'path\', and \'config\' (config is an array). If you specify a lowercase package name, the path will be generated automatically for you based on either package.core_path setting or the default component structure.. (defaults to array())';
+$_lang['setting_customurls.search_class_desc'] = 'the xPDOObject class for the database table to search through. (defaults to \'modUser\')';
+$_lang['setting_customurls.search_field_desc'] = 'the field to use in the URL. (defaults to \'username\')';
+$_lang['setting_customurls.search_result_field_desc'] = 'the field to pass to the resource via the request_name_id. (defaults to \'id\')';
+$_lang['setting_customurls.search_display_field_desc'] = 'the field to set in a special \'display\' placeholder to allow you to use the same placeholder for multiple schemas (defaults to search field). (defaults to \'\')';
+$_lang['setting_customurls.search_where_desc'] = 'an additional filter for the database query (xpdo where). (defaults to array(\'active\' => 1))';
+$_lang['setting_customurls.search_class_test_method_desc'] = 'a method name of the class to run. If resolves to false, will not continue. Useful for permissions checking.. (defaults to \'\')';
+$_lang['setting_customurls.action_map_desc'] = 'an array of keys (action names) and values (resource ids) to use for the sub-actions. (defaults to array())';
+$_lang['setting_customurls.redirect_if_accessed_directly_desc'] = 'will redirect to the error page if visited without CustomUrls. (defaults to true)';
+$_lang['setting_customurls.redirect_if_object_not_found_desc'] = 'will redirect to the error page if the object is not found. (defaults to true)';
+$_lang['setting_customurls.set_placeholders_desc'] = 'will generate some placeholders on the page storing the object field values. (defaults to true)';
+$_lang['setting_customurls.placeholder_prefix_desc'] = 'the placeholder prefix to use if set_placeholders is true. (defaults to \'customurls\')';
+$_lang['setting_customurls.display_placeholder_desc'] = 'the placeholder for the display value to use if set_placeholders is true. (defaults to \'display\')';
+$_lang['setting_customurls.custom_search_replace_desc'] = 'an array of search => replace pairs to str_replace the output with. (defaults to array())';
+$_lang['setting_customurls.run_without_parent_desc'] = 'if set to false, will not be run unless called by another schema in the child_schemas array. (defaults to true)';
+$_lang['setting_customurls.child_schemas_desc'] = 'an array of schema_names OR schema_name => (array) overrides to run the URL remainder through. (defaults to array())';
+$_lang['setting_customurls.url_from_params_desc'] = 'if the page is accessed directly but with the proper GET parameters, the plugin will try to detect the schema from the GET or REQUEST params and forward to the friendly Url. Useful for Quip and similar components that redirect directly to the current page afterwards.. (defaults to true)';
+$_lang['setting_customurls.strict_desc'] = '\'strict mode\' if set to true, if any part of the URL is left over and not parsed, will treat the match as failed. (defaults to false)';
+$_lang['setting_customurls.children_inherit_landing_desc'] = 'if true, children schemas will use the landing page of the parent. (defaults to false)';

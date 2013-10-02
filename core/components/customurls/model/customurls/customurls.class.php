@@ -9,8 +9,8 @@
  *
  */
 include_once dirname(__FILE__).'/cuschema.class.php';
-define('CUSTOMURLS_DEFAULTS_PREFIX','customurls.default.');
-define('CUSTOMURLS_DEFAULTS',array(
+define('CUSTOMURLS_DEFAULTS_PREFIX','customurls.');
+define('CUSTOMURLS_DEFAULTS', array(
         'landing_resource_id' => 0,             // the resource id to redirect to
         'set_request' => true,                  // If true, sets $_REQUEST parameters
         'request_prefix' => 'user_',            // $_REQUEST parameter prefix

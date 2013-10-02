@@ -32,7 +32,10 @@ $install_settings = array();
 $upgrade_settings = array();
 
 foreach(CUSTOMURLS_DEFAULTS as $key => $value) {
-    $install_settings[CUSTOMURLS_DEFAULTS_PREFIX.$key] = $value;
+    $install_settings[CUSTOMURLS_DEFAULTS_PREFIX.$key] = array(
+        'value' => $value,
+        'area' => 'defaults',
+        );
 }
 
 $settings = array(
