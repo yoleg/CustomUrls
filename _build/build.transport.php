@@ -13,7 +13,7 @@ $tstart = explode(" ", microtime());
 /* Set package info be sure to set all of these */
 define('PKG_NAME','CustomUrls');
 define('PKG_NAME_LOWER','customurls');
-define('PKG_VERSION','1.2.1');
+define('PKG_VERSION','1.3.1');
 define('PKG_RELEASE','beta');
 define('PKG_CATEGORY','CustomUrls');
 
