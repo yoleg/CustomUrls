@@ -564,31 +564,8 @@ class TransportDataProcessor {
                 'params' => '',
                 'handler' => '',
             ),
-            'related' => array(
-                'action' => array(
-                    'method' => 'processMenuActions',
-                    'alias' => 'Action',
-                    'type' => 'one',
-                )
-            ),
         ));
         return $menu;
-    }
-    public function processMenuActions($key,$config,$idx=0){
-        $action = $this->_processObject($config,array(
-            'default_field' => 'controller',
-            'class' => 'modAction',
-            'defaults' => array(
-                'id' => $idx,
-                'namespace' => PKG_NAME_LOWER,
-                'parent' => 0,
-                'controller' => '',
-                'haslayout' => 1,
-                'lang_topics' => PKG_NAME_LOWER.':default,file',
-                'assets' => '',
-            ),
-        ));
-        return $action;
     }
     /**
      * Creates a chunk object.
